@@ -16,6 +16,7 @@ profiles
 out.svg
 *.AppImage
 appimage/
+pkg/
 *.cpp
 *.vdf
 .kateconfig
