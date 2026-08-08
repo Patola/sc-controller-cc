@@ -68,6 +68,19 @@ _GYRO_REST_LSB = 32.0  # per-axis window counting as "not moving" (~2 deg/s)
 _GYRO_REST_SECONDS = 0.5  # how long it has to stay there before we adapt, so a
                           # slow deliberate rotation is not absorbed as offset
 _GYRO_BIAS_ALPHA = 0.01  # per-sample blend once adapting
+
+# Per-axis (pitch, yaw, roll) sign taking the raw rates to the EUREL angle
+# convention: + at nose-down / yaw-right / roll-right. _convert_input_data
+# already negates gyaw and groll (but not gpitch) on the way in, so only pitch
+# needs flipping here -- which is the same asymmetry the quaternion path landed
+# on once it was verified against hardware, and these integrate the same rates
+# that path integrated, so small-angle behaviour is unchanged.
+_GYRO_SIGN = (-1.0, 1.0, 1.0)
+
+
+def _wrap_pi(angle: float) -> float:
+	"""Wrap radians into [-pi, pi]."""
+	return (angle + math.pi) % (2 * math.pi) - math.pi
 # Set SCC_GYRO_CALIB=1 to dump raw gyro/accel next to the integrated angles.
 _CALIB = bool(os.environ.get("SCC_GYRO_CALIB"))
 if _CALIB:
@@ -589,7 +602,7 @@ class DS5HidRawController(Controller):
 		self._hidrawdev = hidrawdev
 		self._fileno = hidrawdev._device.fileno()
 		self._id = self._generate_id() if driver else "-"
-		self._previous_quat = [1.0, 0.0, 0.0, 0.0]
+		self._gyro_angles = [0.0, 0.0, 0.0]  # pitch, yaw, roll (radians)
 		self._delta_time = time.time()
 		self._previous_time = time.time()
 
@@ -843,9 +856,9 @@ class DS5HidRawController(Controller):
 		state.accel_z = ctypes.c_int16((data[26] << 8) | data[25]).value * 2
 		# print("GYRO: {} {} {}".format(state.gyaw, state.gpitch, state.groll))
 		# print("ACCEL: {} | {} | {}".format(state.accel_x, state.accel_y, state.accel_z))
-		# Calculate quaternion for gyro data. Needed for tilt controls output.
-		# TODO: Try to add sensor fusion and complementary filter later
-		self._calculate_quaternion(state)
+		# Absolute orientation for the tilt / absolute / lean-to-turn paths.
+		# TODO: accelerometer complementary filter, as the DS4 has
+		self._integrate_orientation(state)
 
 		# Check for CPAD touch
 		if (data[34] & 0x80) == 0:
@@ -888,89 +901,41 @@ class DS5HidRawController(Controller):
 			self._gyro_rest_time = 0.0
 		return tuple(r - b for r, b in zip(raw, bias))
 
-	def _calculate_quaternion(self, state):
+	def _integrate_orientation(self, state):
+		"""Integrate the debiased rates into absolute euler angles (radians,
+		wrapped to [-pi, pi]) and write them to q1-q3 in EUREL units.
+
+		Each axis gets its own accumulator, exactly as the DS4 does. This
+		replaces composing a quaternion and decomposing it back into
+		Tait-Bryan angles, which was mathematically correct and behaviourally
+		wrong: that decomposition is SEQUENTIAL, so the three angles are not
+		independent measurements. Rotating about one physical axis moved all
+		three outputs -- gyro-to-mouse "yawed" diagonally, pitch bled sideways
+		-- and near the singularity the yaw and roll terms flipped sign, which
+		read as inverted axes in absolute mode. It also gimbal-locked from
+		about 75 deg of pitch. Integrating per axis has none of those: the
+		axes stay 1:1, and the DS4 comment says as much.
+
+		The trade is that this is not a true 3D orientation -- large compound
+		rotations do not compose correctly -- but for aiming, where the axes
+		are read independently anyway, decoupled beats geometrically exact.
+		It also puts this driver in the same shape as the DS4's, so the
+		accelerometer complementary filter can drop straight in later.
+		"""
 		gpitch, gyaw, groll = self._debias_gyro(state, self._delta_time)
-		# Convert raw gyro values to degrees per second
-		(yaw, pitch, roll) = (
-			(gyaw / _GYRO_LSB_PER_DEG_SEC),
-			(gpitch / _GYRO_LSB_PER_DEG_SEC),
-			(groll / _GYRO_LSB_PER_DEG_SEC),
-		)
-
-		# Remove time delta element to get gyro angles and convert to radians
-		old_yaw = yaw
-		yaw = yaw * self._delta_time
-		yaw_rad = yaw * math.pi / 180.0
-		pitch = pitch * self._delta_time
-		pitch_rad = pitch * math.pi / 180.0
-		roll = roll * self._delta_time
-		roll_rad = roll * math.pi / 180.0
-		# print("GYRO: {} {} {}".format(yaw, pitch, roll))
-		# print("GYRO: {} | {} | {} | {} | {}".format(state.gyaw, old_yaw, yaw, yaw_rad, self._delta_time))
-
-		# Obtain current quaternion
-		# qx (Roll), qy (Pitch), qz (Yaw), qw (Theta)
-		qx = math.sin(roll_rad / 2) * math.cos(pitch_rad / 2) * math.cos(yaw_rad / 2) - math.cos(
-			roll_rad / 2,
-		) * math.sin(pitch_rad / 2) * math.sin(yaw_rad / 2)
-		qy = math.cos(roll_rad / 2) * math.sin(pitch_rad / 2) * math.cos(yaw_rad / 2) + math.sin(
-			roll_rad / 2,
-		) * math.cos(pitch_rad / 2) * math.sin(yaw_rad / 2)
-		qz = math.cos(roll_rad / 2) * math.cos(pitch_rad / 2) * math.sin(yaw_rad / 2) - math.sin(
-			roll_rad / 2,
-		) * math.sin(pitch_rad / 2) * math.cos(yaw_rad / 2)
-		qw = math.cos(roll_rad / 2) * math.cos(pitch_rad / 2) * math.cos(yaw_rad / 2) + math.sin(
-			roll_rad / 2,
-		) * math.sin(pitch_rad / 2) * math.sin(yaw_rad / 2)
-
-		# Multiply previous calculated quaternion by new quaternion
-		(old_qw, old_qx, old_qy, old_qz) = self._previous_quat
-		Q0Q1_w = old_qw * qw - old_qx * qx - old_qy * qy - old_qz * qz
-		Q0Q1_x = old_qw * qx + old_qx * qw + old_qy * qz - old_qz * qy
-		Q0Q1_y = old_qw * qy - old_qx * qz + old_qy * qw + old_qz * qx
-		Q0Q1_z = old_qw * qz + old_qx * qy - old_qy * qx + old_qz * qw
-
-		# Store calculated quaternion for next poll
-		self._previous_quat = [Q0Q1_w, Q0Q1_x, Q0Q1_y, Q0Q1_z]
-
-		# DS5Controller declares EUREL_GYROS, so q1-q3 have to be euler angles
-		# in 2**15/PI fixed point -- not quaternion components, which is what
-		# this used to store (q1=w, q2=y, q3=x). The mapper then read the
-		# quaternion scalar w as "pitch", the pitch term as "yaw" and left the
-		# real yaw in q4 where nothing ever looks, so absolute gyro, gyro-lean
-		# and every tilt binding were driven by the wrong quantity.
-		#
-		# The conversion below is the exact inverse of the composition above,
-		# which builds the standard aerospace ZYX quaternion from (roll about
-		# x, pitch about y, yaw about z) -- so no convention has to be guessed.
-		roll = math.atan2(
-			2.0 * (Q0Q1_w * Q0Q1_x + Q0Q1_y * Q0Q1_z),
-			1.0 - 2.0 * (Q0Q1_x * Q0Q1_x + Q0Q1_y * Q0Q1_y),
-		)
-		pitch = math.asin(max(-1.0, min(1.0, 2.0 * (Q0Q1_w * Q0Q1_y - Q0Q1_z * Q0Q1_x))))
-		yaw = math.atan2(
-			2.0 * (Q0Q1_w * Q0Q1_z + Q0Q1_x * Q0Q1_y),
-			1.0 - 2.0 * (Q0Q1_y * Q0Q1_y + Q0Q1_z * Q0Q1_z),
-		)
-		# Signs are hardware-verified, not derived: _convert_input_data already
-		# flips gyaw and groll (but not gpitch) on the way in, so only pitch
-		# comes out needing the negation that turns a rate sense into the EUREL
-		# angle sense (+ at nose-down / yaw-right / roll-right).
-		#
-		# Note that ZYX euler angles gimbal-lock at pitch = +-90 deg, where yaw
-		# and roll stop being separable and yaw swings hard. That is inherent
-		# to the representation EUREL_GYROS is defined in, so every controller
-		# on this path shares it; it sits well outside the range gyro aiming
-		# uses, and avoiding it would mean changing the flag's contract.
-		state.q1 = int(-pitch * _EUREL_SCALE)
-		state.q2 = int(yaw * _EUREL_SCALE)
-		state.q3 = int(roll * _EUREL_SCALE)
+		# raw LSB -> radians over this frame
+		k = self._delta_time / _GYRO_LSB_PER_DEG_SEC * math.pi / 180.0
+		a = self._gyro_angles
+		a[0] = _wrap_pi(a[0] + gpitch * _GYRO_SIGN[0] * k)
+		a[1] = _wrap_pi(a[1] + gyaw * _GYRO_SIGN[1] * k)
+		a[2] = _wrap_pi(a[2] + groll * _GYRO_SIGN[2] * k)
+		state.q1 = int(a[0] * _EUREL_SCALE)
+		state.q2 = int(a[1] * _EUREL_SCALE)
+		state.q3 = int(a[2] * _EUREL_SCALE)
 		state.q4 = 0
 
 		if _CALIB:
 			_log_imu_calib(self, state, self._delta_time)
-		# print("TEST QUAT: {}".format(self._previous_quat))
-		# print("TEST QUAT Z: {}".format(self._previous_quat[3] * -1))
 
 	def close(self):
 		# Idempotent: a disconnect is now noticed by the failing read in
