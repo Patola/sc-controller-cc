@@ -123,6 +123,12 @@ class Mapper:
 		STEAM_CONTROLLER_MAGIC_PERIOD_RATIO = 495483.0
 		ef = self.gamepad.ff_read()
 		if ef:  # tale of...
+			# Controllers with real rumble motors take the magnitude directly;
+			# only fall through to the click-train emulation below if they
+			# cannot, which on a v1 is always, its "motors" being pad actuators.
+			if self.controller and self.controller.rumble(
+					ef.level, int(ef.duration * max(1, ef.repetitions))):
+				return
 			period_command = 0
 			amplitude = 0
 			if ef.level != 0:
