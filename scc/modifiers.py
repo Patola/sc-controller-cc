@@ -44,6 +44,7 @@ from scc.constants import (
 	ControllerFlags,
 	HapticPos,
 	SCButtons,
+	right_is_stick,
 )
 from scc.controller import HapticData
 from scc.tools import clamp, nameof
@@ -537,7 +538,7 @@ class BallModifier(Modifier, WholeHapticAction):
 		self.whole(mapper, position, 0, what)
 
 	def change(self, mapper, dx, dy, what):
-		if what in (None, STICK) or (mapper.controller_flags() & ControllerFlags.HAS_RSTICK and what == RIGHT):
+		if what in (None, STICK) or (right_is_stick(mapper.controller_flags()) and what == RIGHT):
 			return self.action.change(mapper, dx, dy, what)
 		if mapper.is_touched(what):
 			if mapper.was_touched(what):
@@ -556,11 +557,14 @@ class BallModifier(Modifier, WholeHapticAction):
 				self._roll(mapper)
 
 	def whole(self, mapper, x, y, what):
-		if (
-			mapper.controller_flags() & ControllerFlags.HAS_RSTICK
-			and not mapper.controller_flags() & ControllerFlags.IS_DECK
-			and what == RIGHT
-		):
+		# A ball on a self-centering stick makes no sense, so RIGHT is passed
+		# straight through when it carries stick data. It must NOT be passed
+		# through for a real right touchpad -- the bypass drops the ball, and
+		# with it this modifier's speed and haptic feedback, which is why
+		# trackball, per-pad sensitivity and pad feedback all did nothing at
+		# once on the SC2. This used to special-case the Deck by name; SC2 has
+		# the same topology, hence the shared predicate.
+		if right_is_stick(mapper.controller_flags()) and what == RIGHT:
 			return self.action.whole(mapper, x, y, what)
 		if mapper.is_touched(what):
 			if mapper.is_touched(what) and not mapper.was_touched(what):
@@ -1468,7 +1472,7 @@ class SmoothModifier(Modifier):
 		return int(x / self._w_sum), int(y / self._w_sum)
 
 	def whole(self, mapper, x, y, what):
-		if mapper.controller_flags() & ControllerFlags.HAS_RSTICK and what == RIGHT:
+		if right_is_stick(mapper.controller_flags()) and what == RIGHT:
 			return self.action.whole(mapper, x, y, what)
 		if mapper.is_touched(what):
 			if self._last_pos is None:

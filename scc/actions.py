@@ -50,6 +50,7 @@ from scc.constants import (
 	YAW,
 	ControllerFlags,
 	SCButtons,
+	right_is_stick,
 )
 from scc.lib import xwrappers as X
 from scc.tools import anglediff, circle_to_square, clamp, ensure_size, nameof, quat2euler
@@ -2318,7 +2319,7 @@ class XYAction(WholeHapticAction, Action):
 			else:
 				self._old_pos = None
 
-		if mapper.controller_flags() & ControllerFlags.HAS_RSTICK and (what == RIGHT or what == RSTICK):
+		if what == RSTICK or (right_is_stick(mapper.controller_flags()) and what == RIGHT):
 			self.x.axis(mapper, x, what)
 			self.y.axis(mapper, y, what)
 			mapper.force_event.add(FE_PAD)

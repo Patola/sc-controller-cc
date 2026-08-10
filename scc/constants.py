@@ -134,6 +134,25 @@ class ControllerFlags(IntEnum):
 	HAS_DPAD       = 1 << 4 # Controller has normal d-pad instead of touchpad
 	NO_GRIPS       = 1 << 5 # Controller has no grips
 	IS_DECK        = 1 << 6 # Very special case
+	HAS_RPAD       = 1 << 7 # Controller has a right touchpad AS WELL AS a right
+	                        # stick (Deck, SC2). HAS_RSTICK alone means the stick
+	                        # replaced the pad, so code that has to know whether
+	                        # the RIGHT slot carries pad or stick data must ask
+	                        # right_is_stick() rather than testing HAS_RSTICK.
+
+
+def right_is_stick(flags: int) -> bool:
+	"""True when the RIGHT input slot carries right-stick data rather than a
+	touchpad.
+
+	HAS_RSTICK is documented as "right stick INSTEAD OF touchpad" and several
+	call sites read it exactly that way -- bypassing the pad-specific handling
+	for RIGHT. That is correct for the DS4/DS5, but the Deck and the SC2 have
+	both, and for them RIGHT really is a touchpad. Getting this wrong silently
+	disables trackball, smoothing, per-pad sensitivity and pad feedback on
+	those controllers, since all of them live in the bypassed code.
+	"""
+	return bool(flags & ControllerFlags.HAS_RSTICK) and not (flags & ControllerFlags.HAS_RPAD)
 
 
 STICK_PAD_MIN      = -32768

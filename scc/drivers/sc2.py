@@ -289,6 +289,8 @@ class SC2Controller(SCController):
         ControllerFlags.EUREL_GYROS
         | ControllerFlags.SEPARATE_STICK
         | ControllerFlags.HAS_RSTICK
+        # right stick AND right touchpad, same topology as the Deck
+        | ControllerFlags.HAS_RPAD
         | ControllerFlags.HAS_DPAD
     )
 

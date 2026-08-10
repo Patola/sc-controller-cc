@@ -21,6 +21,7 @@ from scc.constants import (
 	ControllerFlags,
 	HapticPos,
 	SCButtons,
+	right_is_stick,
 )
 from scc.controller import HapticData
 from scc.lib import xwrappers as X
@@ -446,7 +447,11 @@ class Mapper:
 
 			# Check pads
 			# RPAD
-			if controller.flags & ControllerFlags.IS_DECK or controller.flags & ControllerFlags.HAS_RSTICK:
+			# A stick in the RIGHT slot is sampled on movement; a real touchpad
+			# has to use the touch-based branch, because RPADTOUCH in btn_rem is
+			# what delivers the one final event on lift. Without it a trackball
+			# never learns the finger is gone and so never rolls.
+			if right_is_stick(controller.flags):
 				if FE_PAD in fe or self.old_state.rpad_x != state.rpad_x or self.old_state.rpad_y != state.rpad_y:
 					self.profile.pads[RIGHT].whole(self, state.rpad_x, state.rpad_y, RIGHT)
 			elif FE_PAD in fe or self.buttons & SCButtons.RPADTOUCH or SCButtons.RPADTOUCH & btn_rem:
