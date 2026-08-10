@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING
 import usb1
 
 from scc.constants import STICK_PAD_MAX, STICK_PAD_MIN, ControllerFlags, HapticPos, SCButtons
+from scc.controller import HapticData
 from scc.drivers.sc_dongle import SCController, SCPacketType
 from scc.drivers.usb import USBDevice, register_hotplug_device
 
@@ -103,6 +104,17 @@ STICK_DEADZONE = 3000
 # resend CLEAR_MAPPINGS every N frames so the controller never falls back to
 # lizard (mouse/keyboard) mode, exactly as steamdeck.py does.
 UNLIZARD_INTERVAL = 100
+
+# Simulated pad click. The v2's touchpads have no dome switch under them -- the
+# click is purely haptic, the way Steam does it -- so pressing one feels like
+# nothing at all unless the driver produces the pulse itself. Every other haptic
+# in sc-controller comes from a feedback() modifier the user attaches to an
+# action, and there is no binding for "the pad was pressed" (nor any GUI control
+# for one), so this cannot be expressed as a profile and has to be built in.
+# Emitted on press and, more softly, on release, because that is what a real
+# dome switch does: it clicks going down and again springing back.
+PAD_CLICK_PRESS = 0x6000
+PAD_CLICK_RELEASE = 0x3000
 
 
 # --- report 0x42 layout (see docs/steam-controller-v2-protocol.md) ----------
@@ -298,6 +310,26 @@ class SC2Controller(SCController):
         super().__init__(driver, ccidx, in_endpoint)
         self._out_ep = out_endpoint   # interrupt-OUT endpoint for haptics
         self._old_state = SC2_NULL
+
+    # pad-press button -> which actuator to pulse
+    _PAD_CLICK_SIDES = ((SCButtons.LPAD, HapticPos.LEFT), (SCButtons.RPAD, HapticPos.RIGHT))
+
+    def queue_pad_click(self, idata) -> None:
+        """Queues the simulated dome-switch click for any pad pressed or released
+        in this report. See PAD_CLICK_PRESS.
+
+        Queued through the mapper rather than written straight to the endpoint so
+        it coalesces with whatever else that frame produces, and so an explicit
+        feedback() the user bound to the same pad still wins -- the mapper keeps
+        one pending pulse per side, and this runs before the actions do.
+        """
+        old, new = self._old_state.buttons, idata.buttons
+        for button, pos in self._PAD_CLICK_SIDES:
+            was, now = old & button, new & button
+            if now and not was:
+                self.mapper.send_feedback(HapticData(pos, amplitude=PAD_CLICK_PRESS))
+            elif was and not now:
+                self.mapper.send_feedback(HapticData(pos, amplitude=PAD_CLICK_RELEASE))
 
     def get_type(self) -> str:
         return "sc2"
@@ -502,6 +534,7 @@ class SC2Device(USBDevice):
         if idata.seq % UNLIZARD_INTERVAL == 0:
             c.clear_mappings()      # keep lizard mode from creeping back
         if c.mapper:
+            c.queue_pad_click(idata)
             c.mapper.input(c, c._old_state, idata)
         c._old_state = idata
 
