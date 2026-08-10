@@ -72,7 +72,7 @@ class App(Gtk.Application, UserDataManager, BindingEditor):
 	HILIGHT_COLOR = "#FF00FF00"  # ARGB
 	OBSERVE_COLOR = "#FF60A0FF"  # ARGB
 	CONFIG = "scc.config.json"
-	RELEASE_URL = "https://github.com/C0rn3j/sc-controller/releases/tag/v%s"
+	RELEASE_URL = "https://github.com/Patola/sc-controller-cc/releases/tag/v%s"
 
 	def __init__(self, gladepath: str = "/usr/share/scc", imagepath: str = "/usr/share/scc/images"):
 		Gtk.Application.__init__(
@@ -1219,7 +1219,7 @@ class App(Gtk.Application, UserDataManager, BindingEditor):
 		elif "CANT_SUMMON_THE_DAEMON" in error:
 			msg += "\n" + _(
 				'Background process responsible for emulation is not starting.\n\nTry executing "scc-daemon debug" in terminal window to check for any errors'
-				"\nor <a href='https://github.com/C0rn3j/sc-controller/issues'>open issue on GitHub</a> and copy output there.",
+				"\nor <a href='https://github.com/Patola/sc-controller-cc/issues'>open issue on GitHub</a> and copy output there.",
 			)
 		elif "LIBUSB_ERROR_PIPE" in error:
 			msg += "\n" + _("USB dongle was removed.")

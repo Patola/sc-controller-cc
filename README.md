@@ -1,7 +1,7 @@
 # SC Controller
 
-[![SCC Linux CI](https://github.com/C0rn3j/sc-controller/actions/workflows/scc-linux.yml/badge.svg?branch=python3)](https://github.com/C0rn3j/sc-controller/actions/workflows/scc-linux.yml)
-[![Build and publish AppImages](https://github.com/C0rn3j/sc-controller/actions/workflows/appimage.yml/badge.svg?event=release)](https://github.com/C0rn3j/sc-controller/actions/workflows/appimage.yml)
+[![SCC Linux CI](https://github.com/Patola/sc-controller-cc/actions/workflows/scc-linux.yml/badge.svg?branch=main)](https://github.com/Patola/sc-controller-cc/actions/workflows/scc-linux.yml)
+[![Build and publish AppImages](https://github.com/Patola/sc-controller-cc/actions/workflows/appimage.yml/badge.svg?event=release)](https://github.com/Patola/sc-controller-cc/actions/workflows/appimage.yml)
 
 User-mode driver, mapper and GTK3 based GUI for Steam Controller, DS4 and many other controllers.
 
@@ -80,7 +80,7 @@ Donation links for kozec, who is the original developer, can be found on the [ol
 
 Linux:
   - **Arch Linux:** Found in official [extra](https://archlinux.org/packages/extra/x86_64/sc-controller/) repository and [AUR/sc-controller-git](https://aur.archlinux.org/packages/sc-controller-git/)
-  - **Ubuntu (24.04-noble, 26.04-resolute):** Packaged as AppImage in [GitHub releases](https://github.com/C0rn3j/sc-controller/releases), ***which may also run fine on other operating systems - noble image is currently the most compatible one***
+  - **Ubuntu (24.04-noble, 26.04-resolute):** Packaged as AppImage in [GitHub releases](https://github.com/Patola/sc-controller-cc/releases), ***which may also run fine on other operating systems - noble image is currently the most compatible one***
   - **Gentoo:** Packaged as [game-util/sc-controller](https://packages.gentoo.org/packages/games-util/sc-controller)
   - **Void Linux:** Packaged as [sc-controller](https://github.com/void-linux/void-packages/blob/master/srcpkgs/sc-controller/template) - Run `xbps-install -S sc-controller` in a terminal, points to archived Ryochan7's fork at the time of writing
   - **Others:** You can attempt to use one of the AppImages (try all, AppImages built on older distributions tend to work better), or a package meant for your parent distribution if applicable. Flatpak is planned.
@@ -122,8 +122,8 @@ Windows:
   - [gtk-layer-shell](https://github.com/wmww/gtk-layer-shell)
 
 ### Via Python into a local build directory
-  - ~~Download and extract [latest release](https://github.com/C0rn3j/sc-controller/releases/latest)~~ .zip releases without .git directory are currently broken - tracked in [#50](https://github.com/C0rn3j/sc-controller/issues/50)
-  - Clone the repository `git clone https://github.com/C0rn3j/sc-controller.git` and navigate into it: `cd sc-controller`
+  - ~~Download and extract [latest release](https://github.com/Patola/sc-controller-cc/releases/latest)~~ .zip releases without .git directory are currently broken - tracked upstream in [C0rn3j/sc-controller#50](https://github.com/C0rn3j/sc-controller/issues/50)
+  - Clone the repository `git clone https://github.com/Patola/sc-controller-cc.git` and navigate into it: `cd sc-controller-cc`
   - `python3 -m build --wheel`
   - `python3 -m installer --destdir="./build" dist/*.whl`
   - Run the app via: `SCC_SHARED="${PWD}" PYTHONPATH="./build/usr/lib/python3.12/site-packages" PATH="${PWD}/build/usr/bin:${PATH}" ./build/usr/bin/sc-controller`
@@ -136,8 +136,8 @@ docker build -o build-output --build-arg BASE_CODENAME=noble .
 ```
 
 ### Via Python venv through run.sh
-  - ~~Download and extract [latest release](https://github.com/C0rn3j/sc-controller/releases/latest)~~ .zip releases without .git directory are currently broken - tracked in [#50](https://github.com/C0rn3j/sc-controller/issues/50)
-  - Clone the repository `git clone https://github.com/C0rn3j/sc-controller.git` and navigate into it: `cd sc-controller`
+  - ~~Download and extract [latest release](https://github.com/Patola/sc-controller-cc/releases/latest)~~ .zip releases without .git directory are currently broken - tracked upstream in [C0rn3j/sc-controller#50](https://github.com/C0rn3j/sc-controller/issues/50)
+  - Clone the repository `git clone https://github.com/Patola/sc-controller-cc.git` and navigate into it: `cd sc-controller-cc`
   - Optionally checkout a branch or a tag, like `python3`(default) or `v0.4.9.8.8`
   - Execute `./run.sh`, this automatically builds the project into a venv called `.env`, activates it and runs sc-controller, which in turn runs scc-daemon if one does not run already
   - If you are debugging an issue, running `./run.sh daemon` first will launch the daemon in debug mode, allowing you to launch sc-controller in another terminal with `./run.sh`
