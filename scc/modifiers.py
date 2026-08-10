@@ -1355,6 +1355,12 @@ class FeedbackModifier(Modifier):
 
 	COMMAND = "feedback"
 	PROFILE_KEY_PRIORITY = -4
+	# See HAPTIC_EFFECT_MODIFIERS. Click uses none of the extra parameter rows
+	# -- its knobs are this modifier's own frequency and period -- but it still
+	# has to declare that, or anything iterating the effects trips over it.
+	EFFECT = HapticEffect.CLICK
+	PARAMS = ()
+	LABEL = _("Click")
 
 	def _mod_init(self, position, amplitude=512, frequency=4, period=1024, count=1):
 		self.haptic = HapticData(position, amplitude, frequency, period, count)
@@ -1447,6 +1453,7 @@ class FeedbackToneModifier(_EffectFeedbackModifier):
 	PROFILE_KEY_PRIORITY = -4
 	EFFECT = HapticEffect.TONE
 	PARAMS = ("tone_frequency", "duration", "lfo_frequency", "lfo_depth")
+	LABEL = _("Tone")
 
 	def _mod_init(self, position, amplitude=512, tone_frequency=160, duration=200,
 			lfo_frequency=0, lfo_depth=0):
@@ -1465,6 +1472,7 @@ class FeedbackSweepModifier(_EffectFeedbackModifier):
 	PROFILE_KEY_PRIORITY = -4
 	EFFECT = HapticEffect.SWEEP
 	PARAMS = ("tone_frequency", "end_frequency", "duration")
+	LABEL = _("Sweep")
 
 	def _mod_init(self, position, amplitude=512, tone_frequency=160,
 			end_frequency=40, duration=200):
@@ -1483,6 +1491,7 @@ class FeedbackScriptModifier(_EffectFeedbackModifier):
 	PROFILE_KEY_PRIORITY = -4
 	EFFECT = HapticEffect.SCRIPT
 	PARAMS = ("script_id",)
+	LABEL = _("Preset")
 
 	def _mod_init(self, position, amplitude=512, script_id=0):
 		# amplitude second, matching feedback() and the other two effects, so
@@ -1753,3 +1762,15 @@ class CircularAbsModifier(Modifier, WholeHapticAction):
 			# Set axis on child action
 			self.action.axis(mapper, angle * self.speed, 0)
 			mapper.force_event.add(FE_PAD)
+
+
+# Every haptic effect the action editor can offer, in display order. Kept here
+# rather than in the GUI so it can be tested without importing Gtk -- when it
+# lived in action_editor.py a missing attribute on one entry crashed the editor
+# on construction and no test could see it.
+HAPTIC_EFFECT_MODIFIERS = (
+	FeedbackModifier,
+	FeedbackToneModifier,
+	FeedbackSweepModifier,
+	FeedbackScriptModifier,
+)
