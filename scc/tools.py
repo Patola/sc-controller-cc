@@ -374,13 +374,26 @@ def find_library(libname: str) -> ctypes.CDLL:
 			os.path.abspath(os.path.normpath(os.path.join(site_packages_path, libname + extension))),
 		]
 
-	for path in search_paths:
-		if os.path.exists(path):
-			lib = path
-			break
+	found = [path for path in search_paths if os.path.exists(path)]
+	if found:
+		lib = found[0]
 
 	if not lib:
 		raise OSError("Cant find {}.so. searched at:\n  {}".format(libname, "\n  ".join(search_paths)))
+
+	# The repo root is searched before the environment's site-packages, which is
+	# a leftover from when run.sh built extensions in place. A stale in-place
+	# build therefore shadows a freshly installed one indefinitely, and the
+	# symptom is silent: the old binary loads and behaves like the old source,
+	# so C changes appear to do nothing. Say so rather than letting someone
+	# debug correct code against the wrong binary, as happened for most of a
+	# session over an FF_RUMBLE struct that had grown two fields.
+	newer = [path for path in found[1:] if os.path.getmtime(path) > os.path.getmtime(lib)]
+	if newer:
+		log.warning(
+			"Loading %s but a NEWER build exists at %s -- the first is stale and "
+			"shadows it. Delete it, or run ./run.sh which now clears these.",
+			lib, newer[0])
 	return ctypes.CDLL(lib)
 
 
