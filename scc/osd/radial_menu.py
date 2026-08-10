@@ -273,7 +273,8 @@ class RadialMenu(Menu):
 	def on_event(self, daemon, what, data):
 		if self._submenu:
 			return self._submenu.on_event(daemon, what, data)
-		if what == self._control_with:
+		# same d-pad handling as the base Menu, which this overrides wholesale
+		if self._is_control_event(what):
 			x, y = data
 			# Special case, both confirm_with and cancel_with can be set to STICK
 			if self._cancel_with == STICK and self._control_with == STICK:

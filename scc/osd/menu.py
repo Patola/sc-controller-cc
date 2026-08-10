@@ -11,7 +11,7 @@ from math import sqrt
 from gi.repository import Gdk, GdkPixbuf, GdkX11, Gio, GLib, Gtk
 
 from scc.config import Config
-from scc.constants import DEFAULT, LEFT, RIGHT, SAME, STICK, STICK_PAD_MAX, ControllerFlags, SCButtons
+from scc.constants import DEFAULT, DPAD, LEFT, RIGHT, SAME, STICK, STICK_PAD_MAX, ControllerFlags, SCButtons
 from scc.gui.daemon_manager import DaemonManager
 from scc.lib import xwrappers as X
 from scc.menu_data import MenuData, Separator, Submenu
@@ -542,11 +542,28 @@ class Menu(OSDWindow):
 			self._on_inputs_locked()
 
 		locks = [self._control_with, self._confirm_with, self._cancel_with]
-		if self._control_with == "STICK":
+		if self._control_with == STICK:
 			if self.controller.get_flags() & ControllerFlags.HAS_DPAD != 0:
 				self._control_with_dpad = True
-				locks += ["LEFT"]
+				# Both, because which one the d-pad arrives on is hardware
+				# dependent -- see _is_control_event. A controller only ever
+				# produces one of them, and locking the other is harmless.
+				locks += [LEFT, DPAD]
 		self.controller.lock(success, self.on_failed_to_lock, *locks)
+
+	def _is_control_event(self, what) -> bool:
+		"""True for any input that should drive menu navigation.
+
+		When the menu is controlled by the stick and the pad has a real d-pad,
+		the d-pad navigates as well -- but the source it arrives on depends on
+		the hardware. The DS4/DS5 set HAS_DPAD while storing the d-pad as a
+		hatswitch in the LEFT pad, so it shows up as LEFT; the Deck and the
+		SC2 have a genuine separate DPAD input and report it as DPAD. Only
+		LEFT was accepted, which is why the d-pad did nothing on an SC2.
+		"""
+		if what == self._control_with:
+			return True
+		return self._control_with_dpad and what in (LEFT, DPAD)
 
 	def quit(self, code=-2):
 		# A menu must unlock exactly once. quit() can be re-entered — most
@@ -669,7 +686,7 @@ class Menu(OSDWindow):
 	def on_event(self, daemon, what, data):
 		if self._submenu:
 			return self._submenu.on_event(daemon, what, data)
-		if what == self._control_with or (what == "LEFT" and self._control_with_dpad):
+		if self._is_control_event(what):
 			x, y = data
 			if self._use_cursor:
 				# Special case, both confirm_with and cancel_with
