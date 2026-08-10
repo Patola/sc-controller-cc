@@ -62,6 +62,14 @@ export PYTHONPATH=".":"${PYTHONPATH-}"
 export SCC_SHARED="${PWD}"
 #export PATH="${PWD}/.env/bin:${PATH}"
 
+# Stale in-place extension builds in the repo root shadow the ones this script
+# is about to build: scc.tools.find_library searches the repo root BEFORE the
+# environment's site-packages, so a libuinput.so left over from an old
+# `build_ext --inplace` wins. One from June silently beat every rebuild for two
+# months, and C changes looked like they had no effect at all -- the .so in
+# .env was correct and current, and simply never loaded.
+rm -f ./lib*.so
+
 rm -rf dist
 python -m venv .env
 source .env/bin/activate
