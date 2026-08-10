@@ -7,13 +7,22 @@ FROM $BASE_OS:$BASE_CODENAME AS build-stage
 RUN <<EOR
 	set -eu
 
-	# Workaround for outstanding fix of https://bugs.launchpad.net/ubuntu/+source/python-build/+bug/1992108
-	# (upstream dropped this with jammy support; our releases still build on jammy)
-	. /etc/os-release
-	if [ "${UBUNTU_CODENAME-}" = 'jammy' ]; then
-		echo >>/etc/apt/sources.list.d/jammy-proposed.list 'deb [arch=amd64] http://archive.ubuntu.com/ubuntu/     jammy-proposed universe'
-		echo >>/etc/apt/sources.list.d/jammy-proposed.list 'deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy-proposed universe'
-	fi
+	# jammy used to need python3-build from jammy-proposed, to work around
+	# https://bugs.launchpad.net/ubuntu/+source/python-build/+bug/1992108. That
+	# fix has since been SRU'd into jammy-updates (0.7.0-2ubuntu0.1) and the
+	# package is no longer in proposed at all, so the workaround is not just
+	# unnecessary, it is actively harmful: it enabled ONLY proposed's universe,
+	# at the same priority as the release pockets, so apt would happily upgrade
+	# a universe package to its proposed version while the matching main-pocket
+	# dependency stayed invisible. That is exactly how the v0.6.0.7 build broke:
+	#
+	#   python3.10-venv : Depends: python3.10 (= 3.10.12-1~22.04.17)
+	#                     but 3.10.12-1~22.04.16 is to be installed
+	#   E: Unable to correct problems, you have held broken packages.
+	#
+	# Reproduced in a plain ubuntu:jammy container, and verified fixed by this
+	# removal: the whole dependency set installs, python3-build imports, and
+	# python3 -m venv works.
 
 	apt-get update
 	export DEBIAN_FRONTEND=noninteractive
