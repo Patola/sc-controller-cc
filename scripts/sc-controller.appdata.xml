@@ -3,7 +3,7 @@
   <id>sc-controller.desktop</id>
   <name>SC Controller CC</name>
   <summary>Edits controller mappings</summary>
-  <developer_name>C0rn3j</developer_name>
+  <developer_name>Cláudio 'Patola' Sampaio</developer_name>
   <description>
   <p>
    User-mode driver and GTK3 based GUI for Steam Controller.
@@ -18,11 +18,11 @@
   <screenshots>
     <screenshot type="default">
       <caption>Main Application Window</caption>
-      <image width="923" height="538">https://raw.githubusercontent.com/C0rn3j/sc-controller/master/docs/screenshot1.png</image>
+      <image width="923" height="538">https://raw.githubusercontent.com/Patola/sc-controller-cc/main/docs/screenshot1.png</image>
     </screenshot>
     <screenshot>
       <caption>SC Controller CC in action</caption>
-      <image width="887" height="622">https://raw.githubusercontent.com/C0rn3j/sc-controller/master/docs/screenshot2.png</image>
+      <image width="887" height="622">https://raw.githubusercontent.com/Patola/sc-controller-cc/main/docs/screenshot2.png</image>
     </screenshot>
   </screenshots>
 </component>
