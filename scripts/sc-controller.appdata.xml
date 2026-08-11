@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop">
   <id>sc-controller.desktop</id>
-  <name>SC Controller</name>
+  <name>SC Controller CC</name>
   <summary>Edits controller mappings</summary>
   <developer_name>C0rn3j</developer_name>
   <description>
@@ -21,7 +21,7 @@
       <image width="923" height="538">https://raw.githubusercontent.com/C0rn3j/sc-controller/master/docs/screenshot1.png</image>
     </screenshot>
     <screenshot>
-      <caption>SC Controller in action</caption>
+      <caption>SC Controller CC in action</caption>
       <image width="887" height="622">https://raw.githubusercontent.com/C0rn3j/sc-controller/master/docs/screenshot2.png</image>
     </screenshot>
   </screenshots>

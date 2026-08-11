@@ -125,7 +125,7 @@
                 <property name="margin-left">20</property>
                 <property name="margin-right">20</property>
                 <property name="margin-bottom">10</property>
-                <property name="label" translatable="yes">This dialog allows to setup traditional controllers to be used with SC Controller.
+                <property name="label" translatable="yes">This dialog allows to setup traditional controllers to be used with SC Controller CC.
 
 Please, select your controller from list bellow and click Next.</property>
                 <property name="xalign">0</property>
@@ -889,7 +889,7 @@ That means your account lacks permissons needed to read controller exclusively. 
                 <property name="hexpand">True</property>
                 <property name="label" translatable="yes">&lt;b&gt;DS4 Controller&lt;/b&gt;
 
-SC Controller supports DS4 controllers automatically
+SC Controller CC supports DS4 controllers automatically
 and requires no additional configuration. All you need
 is to make sure that the "DS4 Controller Support" checkbox
 is enabled in the Settings or here:</property>

@@ -1464,7 +1464,7 @@ or even crash.</property>
                     <property name="visible">True</property>
                     <property name="can-focus">False</property>
                     <property name="margin-left">30</property>
-                    <property name="label" translatable="yes">If enabled, any connected DualSense controller will be automatically used by SC Controller</property>
+                    <property name="label" translatable="yes">If enabled, any connected DualSense controller will be automatically used by SC Controller CC</property>
                     <property name="xalign">0</property>
                     <property name="yalign">0</property>
                   </object>
@@ -1497,7 +1497,7 @@ or even crash.</property>
                     <property name="visible">True</property>
                     <property name="can-focus">False</property>
                     <property name="margin-left">30</property>
-                    <property name="label" translatable="yes">If enabled, any connected Dualshock4 controller will be automatically used by SC Controller</property>
+                    <property name="label" translatable="yes">If enabled, any connected Dualshock4 controller will be automatically used by SC Controller CC</property>
                     <property name="xalign">0</property>
                     <property name="yalign">0</property>
                   </object>
@@ -1512,7 +1512,7 @@ or even crash.</property>
                     <property name="visible">True</property>
                     <property name="can-focus">False</property>
                     <property name="margin-left">20</property>
-                    <property name="label" translatable="yes">Controllers listed here are automatically used by SC Controller whenever they are connected.</property>
+                    <property name="label" translatable="yes">Controllers listed here are automatically used by SC Controller CC whenever they are connected.</property>
                     <property name="xalign">0</property>
                   </object>
                   <packing>
@@ -2296,7 +2296,7 @@ grips, triggers, finger positions on both pads and stick angle.</property>
                       <object class="GtkLabel" id="label40">
                         <property name="visible">True</property>
                         <property name="can-focus">False</property>
-                        <property name="label" translatable="yes">Display a message with changelog when SC Controller updates</property>
+                        <property name="label" translatable="yes">Display a message with changelog when SC Controller CC updates</property>
                         <property name="use-underline">True</property>
                         <property name="mnemonic-widget">cbShowOSD</property>
                         <attributes>

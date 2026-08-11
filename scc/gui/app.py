@@ -1,4 +1,4 @@
-"""SC Controller - App
+"""SC Controller CC - App
 
 Main application window
 """
@@ -132,8 +132,8 @@ class App(Gtk.Application, UserDataManager, BindingEditor):
 		self.builder.connect_signals(self)
 		self.window = self.builder.get_object("window")
 		self.add_window(self.window)
-		self.window.set_title(_("SC Controller"))
-		self.window.set_wmclass("SC Controller", "SC Controller")
+		self.window.set_title(_("SC Controller CC"))
+		self.window.set_wmclass("SC Controller CC", "SC Controller CC")
 		self.ribar = None
 		self.create_binding_buttons()
 
@@ -347,7 +347,7 @@ class App(Gtk.Application, UserDataManager, BindingEditor):
 		# self.builder.get_object("mnuShowWindowTray").set_visible(True)
 		# Workaround - always add it to the menu, see https://github.com/C0rn3j/sc-controller/issues/53
 		self.builder.get_object("mnuShowWindowTray").set_visible(True)
-		GLib.idle_add(self.statusicon.set, f"scc-{self.status}", _("SC Controller"))
+		GLib.idle_add(self.statusicon.set, f"scc-{self.status}", _("SC Controller CC"))
 
 	def destroy_statusicon(self):
 		self.statusicon.destroy()
@@ -1628,7 +1628,7 @@ class App(Gtk.Application, UserDataManager, BindingEditor):
 		self.window.set_icon_from_file(icon)
 		self.status = status
 		if self.statusicon:
-			GLib.idle_add(self.statusicon.set, "scc-%s" % (self.status,), _("SC Controller"))
+			GLib.idle_add(self.statusicon.set, "scc-%s" % (self.status,), _("SC Controller CC"))
 		self.recursing = True
 		if status == "alive":
 			btDaemon.set_tooltip_text(_("Emulation is active"))
