@@ -9,13 +9,23 @@ once, which is exactly what happened on the SC2.
 The flags are plain class attributes, so the answer can be pinned here instead
 of being rediscovered on hardware every time a driver is touched.
 """
+import importlib
+
 import pytest
 
 from scc.constants import ControllerFlags, right_is_stick
 
 
 def _flags(module, cls):
-	return getattr(pytest.importorskip("scc.drivers." + module), cls).flags
+	# Not importorskip: the DS4/DS5 drivers pull in hiddrv, which loads the
+	# compiled libhiddrv at import time and raises OSError -- not ImportError --
+	# when it has not been built. CI does not build it, so importorskip alone
+	# turned "cannot check this here" into a failure.
+	try:
+		mod = importlib.import_module("scc.drivers." + module)
+	except (ImportError, OSError) as e:
+		pytest.skip("scc.drivers.%s is not importable here: %s" % (module, e))
+	return getattr(mod, cls).flags
 
 
 # (driver module, controller class, RIGHT is a stick)
