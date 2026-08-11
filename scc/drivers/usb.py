@@ -143,7 +143,13 @@ class USBDevice:
 			except usb1.USBErrorPipe:
 				# Config command stalled; drop it (it is re-sent on the next
 				# configure) instead of tearing the whole device down.
-				pass
+				#
+				# Logged because dropping it silently means a controller can be
+				# left un-configured with nothing anywhere saying so -- which is
+				# indistinguishable, from the outside, from the configuration
+				# having been applied and ignored.
+				log.warning("Control write stalled and was dropped: index=%s data=%s",
+					msg[3], bytes(msg[4][:8]).hex(" "))
 
 		requeue = []
 		while len(self._rmsg):
