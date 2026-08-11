@@ -307,3 +307,32 @@ cannot be claimed exclusively over Bluetooth (see the README).
 
 The donation URL in the AppStream metadata deliberately stays pointed at
 upstream. This fork does not solicit donations.
+
+## Release assets that are attached by hand
+
+Neither workflow produces three of the assets every release carries.
+`appimage.yml` builds only AppImages; `scc-linux.yml` is CI with no release
+trigger and no upload step. So `69-sc-controller.rules`, `PKGBUILD` and the
+Arch `.pkg.tar.zst` are uploaded manually every time -- and v0.6.0.8 shipped
+without them until someone noticed, which is what manual steps do.
+
+Two halves, of very different sizes:
+
+  - **The udev rules and the PKGBUILD can be automated now.** The rules file
+    already lives in `scripts/` unchanged. The PKGBUILD does not live in the
+    repository at all -- it only exists in a gitignored `pkg/archlinux/` --
+    so it has to be brought in first, with its `#tag=` and `pkgver` derived
+    from the release rather than hand-edited. That hand edit is a step that
+    silently produces a package pointing at the previous release if it is
+    forgotten.
+  - **The `.pkg.tar.zst` needs an Arch environment**, so CI would need an
+    `archlinux` container job running `makepkg` as a non-root user. Real work,
+    but it is the only way this stops depending on one maintainer's machine.
+
+Worth writing down at the same time: the release procedure itself. v0.6.0.8
+took four attempts, three of them because the test suite passes in an
+environment neither CI nor the AppImage build has -- CI has no compiled
+extension and no python-evdev, and the AppImage venv additionally lacks
+ioctl_opt. Running the suite against stand-ins for those environments before
+tagging catches it; nothing else does. The Dockerfile is worse: no test runs
+it at all, so a typo in it is found only by a release build failing.
