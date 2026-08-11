@@ -4,8 +4,9 @@ Handles no devices by default. Instead of trying to guess which evdev device
 is a gamepad and which user actually wants to be handled by SCC, list of enabled
 devices is read from config file.
 """
+from __future__ import annotations
 
-from evdev import InputDevice
+from typing import TYPE_CHECKING
 
 from scc.constants import STICK_PAD_MAX, STICK_PAD_MIN, TRIGGER_MAX, TRIGGER_MIN, ControllerFlags, SCButtons
 from scc.controller import Controller
@@ -27,6 +28,12 @@ except ImportError:
 			return key
 
 	ecodes = FakeECodes()
+
+if TYPE_CHECKING:
+	# Annotations only. Imported unconditionally at module scope this defeated
+	# the whole point of the guard above: the module is written to disable
+	# itself when evdev is missing, but could not even be imported.
+	from evdev import InputDevice
 
 import binascii
 import errno

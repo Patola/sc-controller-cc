@@ -141,3 +141,32 @@ def test_nodes_are_found_through_the_hidraw_device(tmp_path, monkeypatch):
 def test_a_device_with_no_input_nodes_yields_nothing(tmp_path, monkeypatch):
 	_fake_sysfs(tmp_path, monkeypatch, {})
 	assert evdevdrv.evdev_nodes_from_hidraw("/dev/hidraw22") == []
+
+
+def test_the_driver_imports_without_python_evdev():
+	"""evdevdrv is written to disable itself when evdev is missing -- HAVE_EVDEV,
+	the FakeECodes fallback, the guards in every helper. All of that was dead:
+	a module-scope `from evdev import InputDevice`, used only for annotations,
+	meant the module could not even be imported without it. Nothing noticed
+	until a test imported it on a machine that had no python-evdev, which is
+	exactly what CI is.
+	"""
+	import subprocess
+	import sys
+
+	code = (
+		"import sys\n"
+		"class Block:\n"
+		"    def find_spec(self, name, path=None, target=None):\n"
+		"        if name == 'evdev' or name.startswith('evdev.'):\n"
+		"            raise ImportError('blocked')\n"
+		"        return None\n"
+		"sys.meta_path.insert(0, Block())\n"
+		"from scc.drivers import evdevdrv\n"
+		"assert evdevdrv.HAVE_EVDEV is False\n"
+		"assert evdevdrv.grab_evdev_nodes('/dev/hidraw0') == []\n"
+		"import scc.drivers.ds4drv, scc.drivers.ds5drv\n"
+		"print('ok')\n"
+	)
+	r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+	assert r.returncode == 0, r.stderr
