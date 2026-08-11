@@ -900,10 +900,16 @@ class MouseAction(WholeHapticAction, Action):
 		# if what == STICK:
 		# mapper.mouse_move(x * self.speed[0] * 0.01, y * self.speed[1] * 0.01)
 		# mapper.force_event.add(FE_STICK)
-		# Only actual sticks drive velocity-style mouse; the right *pad* (what ==
-		# RIGHT) is a relative trackball even on controllers that have a right
-		# stick (HAS_RSTICK) -- the right stick arrives separately as RSTICK.
-		if (what == STICK) or (what == RSTICK):
+		# Only a real stick drives velocity-style mouse. Which slot holds one is
+		# not fixed: the SC2 and the Deck deliver their right stick as RSTICK and
+		# keep a touchpad in RIGHT, but the DS4 and DS5 have no touchpad there
+		# and deliver the right STICK as RIGHT -- their HID state has no rstick_*
+		# fields at all. Hence the predicate rather than a bare slot test.
+		#
+		# Get this wrong for a stick and it falls through to the trackball branch
+		# below, which integrates position deltas: the pointer then tracks the
+		# stick's deflection and springs back to where it started on release.
+		if what in (STICK, RSTICK) or (right_is_stick(mapper.controller_flags()) and what == RIGHT):
 			ratio_x = x / (STICK_PAD_MAX if x > 0 else STICK_PAD_MIN) * copysign(1, x)
 			ratio_y = y / (STICK_PAD_MAX if y > 0 else STICK_PAD_MIN) * copysign(1, y)
 			mouse_dx = ratio_x * (mapper.time_elapsed * BASE_STICK_MOUSE_SPEED) * self.speed[0]
@@ -1672,7 +1678,11 @@ class ButtonAction(HapticEnabledAction, Action):
 		ButtonAction._button_release(mapper, self.button)
 
 	def whole(self, mapper: Mapper, x, y, what):
-		if what == STICK or what == RSTICK:
+		# See MouseAction.whole: the DS4/DS5 right STICK arrives as RIGHT, so the
+		# slot alone does not say whether this is a stick or a pad. Without the
+		# predicate a right stick fell through to the pad branches below, which
+		# wait for a click or a touch that a stick never reports.
+		if what in (STICK, RSTICK) or (right_is_stick(mapper.controller_flags()) and what == RIGHT):
 			# Stick used used as one big button (probably as part of ring bindings)
 			if abs(x) < ButtonAction.STICK_DEADZONE and abs(y) < ButtonAction.STICK_DEADZONE:
 				if self._pressed_key == self.button:
@@ -2158,7 +2168,11 @@ class RingAction(MultichildAction):
 		return MultichildAction.to_string(self, multiline, pad)
 
 	def whole(self, mapper: Mapper, x, y, what):
-		if what == STICK or what == RSTICK or mapper.is_touched(what):
+		# See MouseAction.whole: RIGHT carries a stick on the DS4/DS5 and a
+		# touchpad on the SC2/Deck, and the two take opposite branches all the
+		# way down this method -- a stick recentres, a finger lifts.
+		is_stick = what in (STICK, RSTICK) or (right_is_stick(mapper.controller_flags()) and what == RIGHT)
+		if is_stick or mapper.is_touched(what):
 			angle = atan2(x, y)
 			distance = sqrt(x * x + y * y)
 			if distance < self._radius_m:
@@ -2173,7 +2187,7 @@ class RingAction(MultichildAction):
 
 			if action == self._active:
 				action.whole(mapper, x, y, what)
-			elif what == STICK or what == RSTICK:
+			elif is_stick:
 				# Stck crossed radius border, so active action is changing.
 				# Simulate centering stick for former...
 				self._active.whole(mapper, 0, 0, what)
@@ -2196,7 +2210,7 @@ class RingAction(MultichildAction):
 			# Pad just released
 			self._active.whole(mapper, x, y, what)
 			self._active = NoAction()
-		elif self._active and (what == STICK or what == RSTICK) and x == 0 and y == 0:
+		elif self._active and is_stick and x == 0 and y == 0:
 			# Stick is centered
 			self._active.whole(mapper, x, y, what)
 			self._active = NoAction()
