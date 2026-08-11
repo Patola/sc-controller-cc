@@ -119,6 +119,69 @@ def test_a_stick_held_and_released_does_not_spring_the_pointer_back():
 	assert not m.mouse.moves
 
 
+def _drive(action_string, flags=DS4_LIKE):
+	"""Compresses an action the way the daemon does, then deflects the RIGHT
+	slot once. Returns the pointer movement it asked for.
+	"""
+	from scc.parser import ActionParser
+
+	action = ActionParser().restart(action_string).parse().compress()
+	m = FakeMapper(flags)
+	action.whole(m, STICK_PAD_MAX // 2, 0, RIGHT)
+	return m, action
+
+
+@pytest.mark.parametrize("chain", [
+	"sens(6, 6, mouse())",
+	"sens(6, 6, ball(mouse()))",   # what the action editor writes
+	"ball(sens(6, 6, mouse()))",   # hand-written, and the order the GUI never uses
+])
+def test_sensitivity_survives_a_trackball_on_a_stick(chain):
+	"""A ball on a self-centering stick is meaningless, so the ball steps aside
+	-- but SensitivityModifier stops walking at the first set_speed() it finds,
+	which is the ball, and the ball applies its speed only on the path it just
+	skipped. The sliders did nothing at all.
+	"""
+	plain, trash = _drive("mouse()")
+	scaled, trash2 = _drive(chain)
+	assert plain.stick_moves and scaled.stick_moves
+	assert scaled.stick_moves[0][0] == pytest.approx(plain.stick_moves[0][0] * 6), (
+		"%s did not apply its sensitivity" % (chain,))
+
+
+def test_a_trackball_on_a_pad_keeps_scaling_itself():
+	"""The hand-over must not happen when the ball is actually running, or the
+	speed would be applied twice -- once by the ball, once by the child.
+	"""
+	from scc.modifiers import BallModifier
+	from scc.parser import ActionParser
+
+	action = ActionParser().restart("sens(6, 6, ball(mouse()))").parse().compress()
+	assert isinstance(action, BallModifier)
+	m = FakeMapper(SC2_LIKE)
+	m.touched.add(RIGHT)
+	action.whole(m, 0, 0, RIGHT)
+	action.whole(m, 1000, 0, RIGHT)
+
+	assert not action._speed_handed_over, "ball stepped aside for a touchpad"
+	assert action.get_speed()[:2] == (6.0, 6.0)
+	assert action.action.get_speed()[:2] == (1.0, 1.0), "child would double-apply"
+
+
+def test_a_ball_compresses_its_child_like_every_other_modifier():
+	"""BallModifier.compress overrode the base and dropped the recursion, so a
+	sens() inside a ball stayed a live SensitivityModifier -- which has no
+	whole(), so the whole binding silently did nothing.
+	"""
+	from scc.parser import ActionParser
+
+	compressed = ActionParser().restart("ball(sens(6, 6, mouse()))").parse().compress()
+	assert compressed.to_string() == "ball(mouse())"
+	# the turn-around it overrode compress() for in the first place still works
+	turned = ActionParser().restart("ball(circular(mouse()))").parse().compress()
+	assert turned.to_string().startswith("circular(")
+
+
 class RecordingAction:
 	"""Stands in for a ring's child action."""
 
