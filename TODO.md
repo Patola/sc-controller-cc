@@ -284,3 +284,26 @@ Also worth doing at the same time: `Controller.rumble()` is still unimplemented
 for the DS4 and DS5, so FF_RUMBLE's two magnitudes get averaged into one level
 before they arrive. The heavy and light effects consequently feel identical on
 both pads, where the hardware could tell them apart.
+
+## Our own wiki, and the links that point at upstream's
+
+Three user-facing links still go to C0rn3j's wiki, because that is where the
+content actually is and this fork has none:
+
+  - `scripts/sc-controller.appdata.xml`, `<url type="help">`
+  - `glade/creg.glade` -- "Click here for more info" in Controller Registration,
+    on evdev/HID mode for non-Steam controllers
+  - `glade/global_settings.glade` -- using a phone with RetroArch as an
+    additional controller
+
+Repointing them now would send users somewhere empty, which is worse than
+sending them somewhere foreign. So: set up a wiki on this repository, port or
+rewrite those pages, and only then switch the links over.
+
+Worth doing at the same time, since it is the same question of where a user is
+sent for help: the fork's own pages will need to cover what has diverged --
+the Steam Controller 2, the haptic effects, and the DS4/DS5 caveat that they
+cannot be claimed exclusively over Bluetooth (see the README).
+
+The donation URL in the AppStream metadata deliberately stays pointed at
+upstream. This fork does not solicit donations.
