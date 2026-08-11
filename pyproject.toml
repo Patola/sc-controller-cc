@@ -54,6 +54,14 @@ packages = [
 
 [tool.setuptools_scm]
 
+[tool.pytest.ini_options]
+# Collect only the real test tree. Without this, a build directory left in the
+# repo -- pkg/ from makepkg, build/ from setup.py -- carries its own copy of
+# tests/, and pytest tries to import both under the same module name and fails
+# collection outright. Same trap as a stale in-place .so: the build tree
+# shadows the tree being worked on.
+testpaths = ["tests"]
+
 [tool.ruff]
 # Target non-EOL releases at minimum, or later if needed
 # https://devguide.python.org/versions/
