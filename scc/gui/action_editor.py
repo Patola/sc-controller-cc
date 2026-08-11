@@ -13,7 +13,7 @@ from gi.repository import GLib, Gtk
 
 from scc.actions import Action, NoAction, RingAction, TriggerAction
 from scc.constants import CUT, LINEAR, MINIMUM, ROUND, HapticEffect, HapticPos, SCButtons
-from scc.gui.ae import AEComponent
+from scc.gui.ae import AEComponent, right_slot_is_stick
 from scc.gui.controller_widget import GYROS, PADS, PRESSABLE, STICKS, TRIGGERS
 from scc.gui.dwsnc import headerbar
 from scc.gui.editor import Editor
@@ -1103,6 +1103,15 @@ class ActionEditor(Editor):
 		Uses value returned by action.get_compatible_modifiers.
 		"""
 		cm = action.get_compatible_modifiers() & ActionEditor.MODE_TO_MODS[self._mode]
+
+		if self.id == Profile.RPAD and right_slot_is_stick(self.app):
+			# This "pad" is really a stick. BallModifier works on position
+			# deltas, so fed a self-centering stick it moves the pointer only
+			# while the stick is travelling and drags it all the way back on
+			# release; BallModifier.whole steps aside rather than do that.
+			# Offering the checkbox would be offering a setting that provably
+			# cannot do anything.
+			cm &= ~Action.MOD_BALL
 
 		# Feedback
 		grFeedback = self.builder.get_object("grFeedback")

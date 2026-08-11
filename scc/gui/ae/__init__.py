@@ -7,7 +7,7 @@ import os
 from gi.repository import Gdk, GLib, Gtk
 
 from scc.actions import Action, NoAction, XYAction
-from scc.constants import SCButtons
+from scc.constants import SCButtons, right_is_stick
 from scc.gui.editor import ComboSetter
 from scc.tools import _, ensure_size
 
@@ -39,6 +39,21 @@ def controller_type(app):
 		return c.get_type() if c else None
 	except Exception:
 		return None
+
+
+def right_slot_is_stick(app) -> bool:
+	"""True when this controller's RIGHT pad slot actually carries a stick.
+
+	The DS4 and DS5 have no touchpad in that slot and deliver their right STICK
+	there, so the editor opens a "Right Pad" dialog for what is really a stick.
+	Reads the flags the daemon reports rather than matching type names, so it
+	cannot drift from what the drivers actually set.
+	"""
+	try:
+		c = app.profile_switchers[0].get_controller() if app else None
+		return right_is_stick(c.get_flags()) if c else False
+	except Exception:
+		return False
 
 
 def has_haptic_effects(app) -> bool:

@@ -20,19 +20,31 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-@pytest.fixture
-def editor():
+def make_editor(ctype="sc2", flags=None):
+	"""Builds a real ActionEditor against a stub app.
+
+	`flags` is what the daemon would report for the connected controller; the
+	editor uses it to decide, among other things, whether the RIGHT pad slot is
+	really a stick.
+	"""
 	import gi
 
 	gi.require_version("Gtk", "3.0")
 	gi.require_version("Gdk", "3.0")
 	import scc.actions  # noqa: F401  (import order: the GUI needs it first)
+	from scc.constants import ControllerFlags
 	from scc.gui.action_editor import ActionEditor
 	from scc.paths import get_share_path
 
+	if flags is None:
+		flags = ControllerFlags.HAS_RSTICK | ControllerFlags.HAS_RPAD
+
 	class FakeController:
 		def get_type(self):
-			return "sc2"
+			return ctype
+
+		def get_flags(self):
+			return flags
 
 	class FakeSwitcher:
 		def get_controller(self):
@@ -49,6 +61,11 @@ def editor():
 	ae = ActionEditor(FakeApp(), lambda *a: None)
 	ae._modifiers_enabled = True
 	return ae
+
+
+@pytest.fixture
+def editor():
+	return make_editor()
 
 
 def test_constructs(editor):
@@ -186,3 +203,42 @@ def test_numeric_rows_pair_a_slider_with_a_spin_button(editor):
 	adj = scale.get_adjustment()
 	assert adj.get_step_increment() == 1
 	assert adj.get_page_increment() > 1
+
+
+@pytest.mark.parametrize(("ctype", "rstick_only", "ball_offered"), [
+	("ds4", True, False),   # RIGHT is a stick: a ball there provably does nothing
+	("sc2", False, True),   # RIGHT is a real touchpad: a ball is the whole point
+])
+def test_trackball_is_offered_only_where_it_can_work(ctype, rstick_only, ball_offered):
+	"""The DS4/DS5 right STICK arrives in the right pad slot, so the editor opens
+	a pad dialog for it and used to offer Trackball Mode. BallModifier steps
+	aside for a stick, so the checkbox did nothing at all -- and the friction
+	slider under it did nothing either.
+	"""
+	from scc.actions import MouseAction
+	from scc.constants import ControllerFlags
+	from scc.profile import Profile
+
+	flags = ControllerFlags.HAS_RSTICK
+	if not rstick_only:
+		flags |= ControllerFlags.HAS_RPAD
+	ae = make_editor(ctype, flags)
+	ae.set_input(Profile.RPAD, MouseAction())
+
+	assert ae.builder.get_object("cbBallMode").get_sensitive() is ball_offered
+	for name in ("sclFriction", "lblFriction", "btClearFriction"):
+		if not ball_offered:
+			assert not ae.builder.get_object(name).get_sensitive()
+
+
+def test_the_left_pad_still_offers_a_trackball_on_a_ds4():
+	"""Only the RIGHT slot is special. The DS4 touchpad and the left pad are
+	real pads and must keep the option.
+	"""
+	from scc.actions import MouseAction
+	from scc.constants import ControllerFlags
+	from scc.profile import Profile
+
+	ae = make_editor("ds4", ControllerFlags.HAS_RSTICK)
+	ae.set_input(Profile.LPAD, MouseAction())
+	assert ae.builder.get_object("cbBallMode").get_sensitive()
