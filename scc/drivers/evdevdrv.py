@@ -33,10 +33,17 @@ import errno
 import json
 import logging
 import os
+import re
 import sys
 from collections import namedtuple
 
 log = logging.getLogger("evdev")
+
+RE_EVENT_NODE = re.compile(r"event\d+")
+# Where evdev_nodes_from_hidraw looks. Named so tests can point it at a fake
+# tree instead of monkeypatching os.path.
+SYS_CLASS_HIDRAW = "/sys/class/hidraw"
+DEV_INPUT = "/dev/input"
 
 TRIGGERS = "ltrig", "rtrig"
 FIRST_BUTTON = 288
@@ -498,6 +505,101 @@ def get_evdev_devices_from_syspath(syspath: str) -> list:
 		elif os.path.isdir(path) and not os.path.islink(path):
 			rv += get_evdev_devices_from_syspath(path)
 	return rv
+
+
+def evdev_nodes_from_hidraw(hidraw_path: str) -> list:
+	"""Event nodes of the device behind /dev/hidrawN.
+
+	Deliberately NOT get_evdev_devices_from_syspath: over Bluetooth the syspath
+	handed to the driver callback is the HCI path, while the device itself is
+	published under /sys/devices/virtual/misc/uhid/... , and no walk of the
+	former reaches the latter. The hidraw node is the one handle we are certain
+	to be holding, and /sys/class/hidraw/<name>/device points straight at the
+	HID device that owns both it and the input nodes:
+
+	    /sys/class/hidraw/hidraw22/device/input/input1047/event14
+	"""
+	name = os.path.basename(hidraw_path.rstrip("/"))
+	device = os.path.realpath(os.path.join(SYS_CLASS_HIDRAW, name, "device"))
+	inputs = os.path.join(device, "input")
+	if not os.path.isdir(inputs):
+		return []
+	rv = []
+	for entry in sorted(os.listdir(inputs)):
+		subdir = os.path.join(inputs, entry)
+		if not os.path.isdir(subdir):
+			continue
+		for node in sorted(os.listdir(subdir)):
+			# "eventN" exactly: sysfs also puts plain attribute files in here,
+			# and "event_count" is one of them
+			if RE_EVENT_NODE.fullmatch(node):
+				rv.append(os.path.join(DEV_INPUT, node))
+	return rv
+
+
+def grab_evdev_nodes(hidraw_path: str) -> list:
+	"""Take exclusive control of every evdev node the kernel exposes for a device.
+
+	Opening /dev/hidrawN does NOT displace the kernel's HID driver, the way
+	claiming a USB interface through libusb does -- hid-playstation stays bound
+	and keeps publishing its own evdev nodes. On a DS4 or DS5 that includes the
+	touchpad as a multitouch device, which libinput then treats as a real
+	touchpad: it moves the pointer with its own acceleration and inertia, and
+	its clickpad button mapping wins over whatever the pad is bound to, so the
+	pad appears unconfigurable. The buttons and sticks arrive twice as well,
+	once from us and once from the kernel's gamepad node.
+
+	EVIOCGRAB on each node makes this daemon the only reader. Returns the
+	devices that were grabbed, to be handed back to ungrab_evdev_nodes on
+	disconnect.
+
+	Never fatal: a node we fail to grab is one the user keeps seeing double on,
+	which is worth a warning but not worth refusing to drive the controller.
+	"""
+	if not HAVE_EVDEV:
+		log.warning("evdev not available; the kernel keeps its own nodes for %s", hidraw_path)
+		return []
+	grabbed = []
+	try:
+		paths = evdev_nodes_from_hidraw(hidraw_path)
+	except Exception as e:
+		log.warning("Could not enumerate evdev nodes for %s: %s", hidraw_path, e)
+		return []
+	if not paths:
+		log.warning("Found no kernel evdev nodes for %s; it may keep its own input", hidraw_path)
+	devices = []
+	for path in paths:
+		try:
+			devices.append(evdev.InputDevice(path))
+		except Exception as e:
+			log.warning("Could not open %s: %s", path, e)
+	for device in devices:
+		try:
+			device.grab()
+			grabbed.append(device)
+			log.info("Grabbed kernel evdev node %s (%s)", device.path, device.name)
+		except Exception as e:
+			log.warning("Could not grab %s (%s): %s", device.path, device.name, e)
+			try:
+				device.close()
+			except Exception:
+				pass
+	return grabbed
+
+
+def ungrab_evdev_nodes(devices: list) -> None:
+	"""Hand back what grab_evdev_nodes took. Safe to call on a device that has
+	already gone away -- which is the usual case, since this runs on disconnect.
+	"""
+	for device in devices or ():
+		try:
+			device.ungrab()
+		except Exception:
+			pass
+		try:
+			device.close()
+		except Exception:
+			pass
 
 
 def get_axes(dev):

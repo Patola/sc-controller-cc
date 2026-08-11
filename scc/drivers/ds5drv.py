@@ -27,7 +27,9 @@ from scc.drivers.evdevdrv import (
 	EvdevController,
 	get_axes,
 	get_evdev_devices_from_syspath,
+	grab_evdev_nodes,
 	make_new_device,
+	ungrab_evdev_nodes,
 )
 from scc.drivers.hiddrv import (
 	BUTTON_COUNT,
@@ -610,6 +612,10 @@ class DS5HidRawController(Controller):
 		self._set_operational()
 		self.read_serial()
 		# self.configure()
+		# hidraw leaves hid-playstation bound, so the kernel keeps publishing its
+		# own evdev nodes for this pad -- including the touchpad as a multitouch
+		# device that libinput drives as a real touchpad. See grab_evdev_nodes.
+		self._grabbed = grab_evdev_nodes(hidrawdev._device.name)
 		self._poller = self.daemon.get_poller()
 		if self._poller:
 			self._poller.register(self._fileno, self._poller.POLLIN, self._input)
@@ -947,6 +953,8 @@ class DS5HidRawController(Controller):
 		if self._poller:
 			self._poller.unregister(self._fileno)
 
+		ungrab_evdev_nodes(getattr(self, "_grabbed", None))
+		self._grabbed = []
 		self.daemon.remove_controller(self)
 		self._hidrawdev._device.close()
 		# log.debug("CLOSING")
