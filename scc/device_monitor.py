@@ -147,22 +147,48 @@ class DeviceMonitor(Monitor):
 				pass
 		return None
 
+	def _forget(self, syspath: str) -> None:
+		"""Drop a syspath from known_devs and tell whoever registered it.
+
+		The callback is called with (syspath, vendor, product) -- the same
+		signature the driver-level removed_cb uses -- and is never allowed to
+		propagate. It runs inside a poller callback, and neither Poller.poll nor
+		SCCDaemon.run catches anything, so one raising callback used to take the
+		whole daemon down with it, every other controller and the OSD included.
+		"""
+		vendor, product, cb = self.known_devs.pop(syspath)
+		if cb:
+			try:
+				cb(syspath, vendor, product)
+			except Exception as e:
+				log.exception(e)
+
 	def on_data_ready(self, *a) -> None:
 		event = self.receive_device()
 		if event:
 			if event.action == "bind" and event.initialized:
-				if event.syspath not in self.known_devs:
-					self._on_new_syspath(event.subsystem, event.syspath)
+				if event.syspath in self.known_devs:
+					self._forget(event.syspath)
+				self._on_new_syspath(event.subsystem, event.syspath)
 			elif event.action == "add" and event.initialized and event.subsystem in ("input", "bluetooth"):
 				# those are not bound
-				if event.syspath not in self.known_devs:
-					if event.subsystem == "bluetooth":
-						self._get_hci_addresses()
-					self._on_new_syspath(event.subsystem, event.syspath)
+				if event.syspath in self.known_devs:
+					# A device cannot be added without having gone away first,
+					# so a syspath still registered here is stale -- its removal
+					# was never seen. Bluetooth makes that routine: the syspath
+					# is the HCI path and its handle alternates between
+					# connections (hci0:50 <-> hci0:51), so the remove that
+					# arrives names the OTHER handle and never matches. The
+					# stale entry then suppressed every future reconnect on that
+					# handle, which is why a re-paired controller was recognised
+					# but delivered no input.
+					log.debug("Re-add of known syspath %s; dropping stale entry", event.syspath)
+					self._forget(event.syspath)
+				if event.subsystem == "bluetooth":
+					self._get_hci_addresses()
+				self._on_new_syspath(event.subsystem, event.syspath)
 			elif event.action in ("remove", "unbind") and event.syspath in self.known_devs:
-				vendor, product, cb = self.known_devs.pop(event.syspath)
-				if cb:
-					cb(event.syspath, vendor, product)
+				self._forget(event.syspath)
 
 	def rescan(self) -> None:
 		"""Scan and call callbacks for already connected devices."""

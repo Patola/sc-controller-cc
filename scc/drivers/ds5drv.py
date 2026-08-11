@@ -943,10 +943,15 @@ class DS5HidRawController(Controller):
 		if _CALIB:
 			_log_imu_calib(self, state, self._delta_time)
 
-	def close(self):
+	def close(self, *a):
 		# Idempotent: a disconnect is now noticed by the failing read in
 		# _input, which closes right away, while the hotplug teardown that
 		# follows closes again.
+		#
+		# *a: DeviceMonitor calls its remove callbacks with (syspath, vendor,
+		# product), so without it this raised TypeError inside the poller
+		# callback -- nothing catches that, so the daemon died instead of
+		# closing the controller.
 		if self._closed:
 			return
 		self._closed = True

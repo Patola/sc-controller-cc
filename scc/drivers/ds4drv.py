@@ -4,6 +4,7 @@ Extends HID driver with DS4-specific options.
 """
 
 import ctypes
+import errno
 import logging
 import math
 import os
@@ -571,6 +572,7 @@ class DS4HidRawController(Controller):
 		# own evdev nodes for this pad -- including the touchpad as a multitouch
 		# device that libinput drives as a real touchpad. See grab_evdev_nodes.
 		self._grabbed = grab_evdev_nodes(hidrawdev._device.name)
+		self._closed = False
 		self._poller = self.daemon.get_poller()
 		if self._poller:
 			self._poller.register(self._fileno, self._poller.POLLIN, self._input)
@@ -624,7 +626,17 @@ class DS4HidRawController(Controller):
 	def _input(self, *a) -> None:
 		try:
 			data = self._hidrawdev.read(BT_REPORT_SIZE)
-		except OSError:
+		except OSError as e:
+			# A Bluetooth disconnect surfaces here as a failing read. This used
+			# to just return, so the controller stayed registered forever,
+			# holding a dead hidraw fd and dead evdev grabs, while the poller
+			# spun on the closed descriptor. Closing here means recovery does
+			# not depend on a udev remove event arriving and matching -- which
+			# is exactly what it could not be relied upon to do.
+			if e.errno not in (errno.EIO, errno.ENODEV, errno.ENXIO, errno.EBADF):
+				return
+			log.debug("DS4 disconnected (%s), removing controller", e.strerror)
+			self.close()
 			return
 		if not getattr(self, "_logged_first", False):
 			# One-off: tells the BT test which report the controller sends. 0x11 =
@@ -674,7 +686,14 @@ class DS4HidRawController(Controller):
 			magic_number += 1
 		return id
 
-	def close(self) -> None:
+	def close(self, *a) -> None:
+		# *a: DeviceMonitor calls its remove callbacks with (syspath, vendor,
+		# product). Without it this raised TypeError inside the poller callback,
+		# which nothing catches -- so the controller was never closed AND the
+		# daemon died. sc_by_bt's close already took *a; this one did not.
+		if self._closed:
+			return
+		self._closed = True
 		if self._poller:
 			self._poller.unregister(self._fileno)
 		ungrab_evdev_nodes(getattr(self, "_grabbed", None))
