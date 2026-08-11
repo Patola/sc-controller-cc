@@ -53,7 +53,10 @@ RUN <<EOR
 	python -m build --wheel
 	python -m venv .env
 	. .env/bin/activate
-	pip install libusb1 pytest vdf
+	# ioctl_opt is a real runtime dependency (device_monitor, lib/hidraw), so a
+	test that imports either needs it here -- the wheel that would pull it in is
+	not installed until after this test run.
+	pip install libusb1 pytest vdf ioctl_opt
 	# Tests need Python 3.11+, which jammy (3.10) lacks. os-release must be
 	# sourced HERE: each RUN is a fresh shell, so the previous RUN's sourcing
 	# doesn't carry over -- the old unquoted, unset ${UBUNTU_CODENAME} made

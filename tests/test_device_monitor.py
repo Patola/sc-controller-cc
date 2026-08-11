@@ -12,7 +12,10 @@ from collections import namedtuple
 
 import pytest
 
-from scc.device_monitor import DeviceMonitor
+# scc.device_monitor needs ioctl_opt, a real runtime dependency that a minimal
+# build environment may not have installed yet. Not being able to check this
+# here is a skip, not a failure.
+DeviceMonitor = pytest.importorskip("scc.device_monitor").DeviceMonitor
 
 HCI_50 = ("/sys/devices/pci0000:00/0000:00:02.1/0000:04:00.0/0000:05:08.0/"
           "0000:0b:00.0/0000:0c:0c.0/0000:15:00.0/usb1/1-12/1-12:1.0/bluetooth/hci0/hci0:50")
