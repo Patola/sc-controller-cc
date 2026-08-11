@@ -179,3 +179,70 @@ class TestSimulatedPadClick:
 	def test_other_buttons_do_not_click(self) -> None:
 		assert _click(0, SCButtons.A) == []
 		assert _click(0, SCButtons.RPADTOUCH) == []
+
+
+class TestRawDebugDump:
+	"""SCC_SC2_DEBUG=1 reads the report a second time, by hand.
+
+	It has to, because its whole job is to show bytes that parse_input may be
+	reading from the wrong place. That makes the two copies of the layout able
+	to drift apart, which would make the diagnostic lie exactly when it is
+	being relied upon -- so they are pinned to each other here.
+	"""
+
+	def test_the_dump_offsets_agree_with_the_parser(self):
+		import struct as _struct
+
+		from scc.drivers.sc2 import _INPUT_FORMAT
+
+		f = bytearray(54)
+		f[0] = 0x42
+		_struct.pack_into("<hhh", f, 34, 111, 222, 333)
+		_struct.pack_into("<hhh", f, 40, -11, -22, -33)
+		_struct.pack_into("<hhhh", f, 46, 32000, 100, 200, 300)
+		parsed = _struct.unpack(_INPUT_FORMAT, bytes(f))
+
+		assert _struct.unpack("<hhh", bytes(f[34:40])) == parsed[18:21]
+		assert _struct.unpack("<hhh", bytes(f[40:46])) == parsed[21:24]
+		assert _struct.unpack("<hhhh", bytes(f[46:54])) == parsed[24:28]
+
+	def test_it_says_so_when_the_quaternion_is_absent(self, caplog):
+		"""The finding the whole exercise exists to establish, one way or the
+		other: is the controller sending orientation data at all?
+		"""
+		import logging
+
+		import scc.drivers.sc2 as sc2
+
+		sc2._raw_seen.clear()
+		sc2._raw_dumped = 0
+		sc2._raw_last_t = 0.0
+
+		quiet = _frame()                       # quaternion left at zero
+		with caplog.at_level(logging.INFO, logger="SC2"):
+			sc2._log_raw_report(quiet)
+		assert "ALL ZERO" in caplog.text
+
+		caplog.clear()
+		sc2._raw_last_t = 0.0
+		live = bytearray(_frame())
+		struct.pack_into("<hhhh", live, 46, 32000, 100, 200, 300)
+		with caplog.at_level(logging.INFO, logger="SC2"):
+			sc2._log_raw_report(bytes(live))
+		assert "ALL ZERO" not in caplog.text
+		assert "w  32000" in caplog.text.replace("w 32000", "w  32000")
+
+	def test_an_unparsed_report_is_announced(self, caplog):
+		"""0x45 is the firmware variant with no quaternion at all; anything we
+		do not parse needs to be visible rather than silently dropped.
+		"""
+		import logging
+
+		import scc.drivers.sc2 as sc2
+
+		sc2._raw_seen.clear()
+		sc2._raw_dumped = 3                    # past the full-dump budget
+		with caplog.at_level(logging.INFO, logger="SC2"):
+			sc2._log_raw_report(bytes([0x45] + [0] * 53))
+		assert "id=0x45" in caplog.text
+		assert "parsed: NO" in caplog.text

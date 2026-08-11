@@ -56,7 +56,65 @@ if _CALIB:
     log.setLevel(logging.INFO)
 
 
+# Set SCC_SC2_DEBUG=1 to dump what the controller actually sends and what we
+# actually send it. Intended for diagnosing a controller whose orientation data
+# never arrives: it answers, without guessing, whether the quaternion is on the
+# wire at all, whether the report is the one we parse, and whether the
+# configuration that asks for it even reached the device.
+_SC2_DEBUG = bool(os.environ.get("SCC_SC2_DEBUG"))
+if _SC2_DEBUG:
+    log.setLevel(logging.INFO)
+
 _calib_last_t = 0.0
+_raw_last_t = 0.0
+_raw_seen: set = set()
+_raw_dumped = 0
+
+
+def _log_raw_report(data) -> None:
+    """Raw report dump for SCC_SC2_DEBUG=1.
+
+    Three things, because three different faults produce the same symptom of
+    "orientation bindings do nothing":
+
+      - every distinct (report id, length) is announced once. Firmware that
+        streams 0x45 instead of 0x42 has no quaternion at all, and a length we
+        do not expect means the layout below is being read at the wrong offsets.
+      - the first few reports are dumped whole, so the layout can be checked
+        against docs/steam-controller-v2-protocol.md by eye.
+      - then, throttled, just the quaternion: the raw int16s AND the bytes they
+        came from. All-zero bytes mean the controller is not sending it;
+        non-zero bytes with zero euler angles would mean we are misreading it.
+    """
+    global _raw_last_t, _raw_dumped
+    if not data:
+        return
+    key = (data[0], len(data))
+    if key not in _raw_seen:
+        _raw_seen.add(key)
+        log.info("SC2-RAW  new report id=0x%02x len=%d  (parsed: %s)",
+                 data[0], len(data),
+                 "yes" if data[0] == INPUT_REPORT_ID and len(data) >= INPUT_SIZE else "NO")
+    if _raw_dumped < 3:
+        _raw_dumped += 1
+        log.info("SC2-RAW  full report #%d: %s", _raw_dumped, bytes(data).hex(" "))
+    if data[0] != INPUT_REPORT_ID or len(data) < INPUT_SIZE:
+        return
+    now = time.time()
+    if now - _raw_last_t < 0.5:
+        return
+    _raw_last_t = now
+    qbytes = bytes(data[46:54])
+    qw, qx, qy, qz = struct.unpack("<hhhh", qbytes)
+    rates = struct.unpack("<hhh", bytes(data[40:46]))
+    accel = struct.unpack("<hhh", bytes(data[34:40]))
+    log.info(
+        "SC2-RAW  quat raw=(w% 7d x% 7d y% 7d z% 7d) bytes=%s %s  |  "
+        "rates=(% 6d % 6d % 6d)  accel=(% 6d % 6d % 6d)",
+        qw, qx, qy, qz, qbytes.hex(" "),
+        "<-- ALL ZERO: the controller is not streaming the quaternion"
+        if not (qw or qx or qy or qz) else "",
+        rates[0], rates[1], rates[2], accel[0], accel[1], accel[2])
 
 
 def _log_imu_calib(idata) -> None:
@@ -447,6 +505,11 @@ class SC2Controller(SCController):
             self._led_level = led_level
         if enable_gyros is not None:
             self._enable_gyros = enable_gyros
+        if _SC2_DEBUG:
+            mask = self._imu_mask()
+            log.info("SC2-CFG  register 0x30 = 0x%02x  (gyro=%s accel=%s quaternion=%s)",
+                     mask, bool(mask & self.IMU_GYRO), bool(mask & self.IMU_ACCEL),
+                     bool(mask & self.IMU_QUAT))
         # main config block: 87 0f 30 <imu> 00 07 07 00 08 07 00 31 02 00 52 03
         self._driver.overwrite_control(self._ccidx, bytes(
             (SCPacketType.CONFIGURE, 0x0F, 0x30, self._imu_mask(), 0x00, 0x07, 0x07, 0x00,
@@ -617,6 +680,10 @@ class SC2Device(USBDevice):
         raise NotImplementedError
 
     def _on_input(self, endpoint: int, data: bytearray) -> None:
+        if _SC2_DEBUG:
+            # before parse_input, which discards everything that is not 0x42 --
+            # and "what else is it sending?" is one of the questions
+            _log_raw_report(data)
         idata = parse_input(data)
         if idata is None:
             # Firmware watchdog (cheap, once): some SC2 firmware switched the
