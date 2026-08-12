@@ -260,7 +260,8 @@ class SCCDaemon(Daemon):
 		with self.lock:
 			for c in self.clients:
 				c.close()
-		os.system("%s %s None restart &" % (sys.executable, sys.argv[0]))
+		subprocess.Popen([find_python(), sys.argv[0], "None", "restart"],
+			start_new_session=True)
 
 	def on_sa_led(self, mapper, action):
 		"""Called when 'led' action is used"""
