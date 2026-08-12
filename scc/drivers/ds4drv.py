@@ -12,7 +12,7 @@ import sys
 import time
 from typing import TYPE_CHECKING
 
-from scc.constants import STICK_PAD_MAX, STICK_PAD_MIN, ControllerFlags, SCButtons
+from scc.constants import STICK_PAD_MAX, STICK_PAD_MIN, TRIGGER_MAX, ControllerFlags, SCButtons
 from scc.controller import Controller
 from scc.drivers.evdevdrv import (
 	HAVE_EVDEV,
@@ -198,10 +198,11 @@ class DS4Controller(HIDController):
 			size=8,
 			data=AxisDataUnion(
 				axis=AxisModeData(
-					scale=1.0,
-					offset=-127.5,
-					clamp_max=257,
-					deadzone=10,
+					scale=2.0 / 255,
+					offset=-1.0,
+					clamp_min=STICK_PAD_MIN,
+					clamp_max=STICK_PAD_MAX,
+					deadzone=10 * 2.0 / 255,
 				),
 			),
 		)
@@ -211,10 +212,11 @@ class DS4Controller(HIDController):
 			size=8,
 			data=AxisDataUnion(
 				axis=AxisModeData(
-					scale=-1.0,
-					offset=127.5,
-					clamp_max=257,
-					deadzone=10,
+					scale=-2.0 / 255,
+					offset=1.0,
+					clamp_min=STICK_PAD_MIN,
+					clamp_max=STICK_PAD_MAX,
+					deadzone=10 * 2.0 / 255,
 				),
 			),
 		)
@@ -225,10 +227,11 @@ class DS4Controller(HIDController):
 			data=AxisDataUnion(
 				axis=AxisModeData(
 					button=SCButtons.RPADTOUCH,
-					scale=1.0,
-					offset=-127.5,
-					clamp_max=257,
-					deadzone=10,
+					scale=2.0 / 255,
+					offset=-1.0,
+					clamp_min=STICK_PAD_MIN,
+					clamp_max=STICK_PAD_MAX,
+					deadzone=10 * 2.0 / 255,
 				),
 			),
 		)
@@ -239,10 +242,11 @@ class DS4Controller(HIDController):
 			data=AxisDataUnion(
 				axis=AxisModeData(
 					button=SCButtons.RPADTOUCH,
-					scale=-1.0,
-					offset=127.5,
-					clamp_max=257,
-					deadzone=10,
+					scale=-2.0 / 255,
+					offset=1.0,
+					clamp_min=STICK_PAD_MIN,
+					clamp_max=STICK_PAD_MAX,
+					deadzone=10 * 2.0 / 255,
 				),
 			),
 		)
@@ -252,9 +256,9 @@ class DS4Controller(HIDController):
 			size=8,
 			data=AxisDataUnion(
 				axis=AxisModeData(
-					scale=1.0,
-					clamp_max=1,
-					deadzone=10,
+					scale=1.0 / 255,
+					clamp_max=TRIGGER_MAX,
+					deadzone=10.0 / 255,
 				),
 			),
 		)
@@ -264,9 +268,9 @@ class DS4Controller(HIDController):
 			size=8,
 			data=AxisDataUnion(
 				axis=AxisModeData(
-					scale=1.0,
-					clamp_max=1,
-					deadzone=10,
+					scale=1.0 / 255,
+					clamp_max=TRIGGER_MAX,
+					deadzone=10.0 / 255,
 				),
 			),
 		)
@@ -297,6 +301,7 @@ class DS4Controller(HIDController):
 				self._decoder.buttons.button_map[x] = self.button_to_bit(sc)
 
 		self._packet_size = 64
+		self._decoder.packet_size = 64
 
 	def input(self, endpoint: int, data: bytearray) -> None:
 		# Special override for CPAD touch button
@@ -592,22 +597,22 @@ class DS4HidRawController(Controller):
 				button=SCButtons.LPAD | SCButtons.LPADTOUCH, min=STICK_PAD_MIN, max=STICK_PAD_MAX)))
 		d.axes[AxisType.AXIS_STICK_X] = AxisData(
 			mode=AxisMode.AXIS, byte_offset=1 + o, size=8,
-			data=AxisDataUnion(axis=AxisModeData(scale=1.0, offset=-127.5, clamp_max=257, deadzone=10)))
+			data=AxisDataUnion(axis=AxisModeData(scale=2.0/255, offset=-1.0, clamp_min=STICK_PAD_MIN, clamp_max=STICK_PAD_MAX, deadzone=10*2.0/255)))
 		d.axes[AxisType.AXIS_STICK_Y] = AxisData(
 			mode=AxisMode.AXIS, byte_offset=2 + o, size=8,
-			data=AxisDataUnion(axis=AxisModeData(scale=-1.0, offset=127.5, clamp_max=257, deadzone=10)))
+			data=AxisDataUnion(axis=AxisModeData(scale=-2.0/255, offset=1.0, clamp_min=STICK_PAD_MIN, clamp_max=STICK_PAD_MAX, deadzone=10*2.0/255)))
 		d.axes[AxisType.AXIS_RPAD_X] = AxisData(
 			mode=AxisMode.AXIS, byte_offset=3 + o, size=8,
-			data=AxisDataUnion(axis=AxisModeData(button=SCButtons.RPADTOUCH, scale=1.0, offset=-127.5, clamp_max=257, deadzone=10)))
+			data=AxisDataUnion(axis=AxisModeData(button=SCButtons.RPADTOUCH, scale=2.0/255, offset=-1.0, clamp_min=STICK_PAD_MIN, clamp_max=STICK_PAD_MAX, deadzone=10*2.0/255)))
 		d.axes[AxisType.AXIS_RPAD_Y] = AxisData(
 			mode=AxisMode.AXIS, byte_offset=4 + o, size=8,
-			data=AxisDataUnion(axis=AxisModeData(button=SCButtons.RPADTOUCH, scale=-1.0, offset=127.5, clamp_max=257, deadzone=10)))
+			data=AxisDataUnion(axis=AxisModeData(button=SCButtons.RPADTOUCH, scale=-2.0/255, offset=1.0, clamp_min=STICK_PAD_MIN, clamp_max=STICK_PAD_MAX, deadzone=10*2.0/255)))
 		d.axes[AxisType.AXIS_LTRIG] = AxisData(
 			mode=AxisMode.AXIS, byte_offset=8 + o, size=8,
-			data=AxisDataUnion(axis=AxisModeData(scale=1.0, clamp_max=1, deadzone=10)))
+			data=AxisDataUnion(axis=AxisModeData(scale=1.0/255, clamp_max=TRIGGER_MAX, deadzone=10.0/255)))
 		d.axes[AxisType.AXIS_RTRIG] = AxisData(
 			mode=AxisMode.AXIS, byte_offset=9 + o, size=8,
-			data=AxisDataUnion(axis=AxisModeData(scale=1.0, clamp_max=1, deadzone=10)))
+			data=AxisDataUnion(axis=AxisModeData(scale=1.0/255, clamp_max=TRIGGER_MAX, deadzone=10.0/255)))
 		d.axes[AxisType.AXIS_GPITCH] = AxisData(mode=AxisMode.DS4ACCEL, byte_offset=13 + o)
 		d.axes[AxisType.AXIS_GROLL] = AxisData(mode=AxisMode.DS4ACCEL, byte_offset=17 + o)
 		d.axes[AxisType.AXIS_GYAW] = AxisData(mode=AxisMode.DS4ACCEL, byte_offset=15 + o)
@@ -621,6 +626,7 @@ class DS4HidRawController(Controller):
 			d.buttons.button_map[x] = 64
 		for x, sc in enumerate(DS4Controller.BUTTON_MAP):
 			d.buttons.button_map[x] = HIDController.button_to_bit(sc)
+		d.packet_size = BT_REPORT_SIZE
 		return d
 
 	def _input(self, *a) -> None:
