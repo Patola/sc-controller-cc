@@ -165,19 +165,103 @@ def _log_imu_calib_usb(controller, data, state) -> None:
 	controller._calib_last_t = now
 	# Offsets are the ones _load_hid_descriptor decodes from, deliberately: if
 	# they are wrong, this prints wrong in the same way and stays honest.
-	raw = {name: _s16le(data, off) for name, off in (
-		("b16", 16), ("b18", 18), ("b20", 20))}
+	b16, b18, b20 = (_s16le(data, off) for off in (16, 18, 20))
 	ax, ay, az = (_s16le(data, off) for off in (22, 24, 26))
 	mag = math.sqrt(ax * ax + ay * ay + az * az) or 1.0
+	bp, by, br = controller._gyro_bias
 	log.info(
-		"GYRO-CALIB/usb  raw=(b16% 7d b18% 7d b20% 7d)  ->  decoded "
-		"pitch=% 7d yaw=% 7d roll=% 7d  |  q=(% 7d % 7d % 7d)  "
-		"accel unit=(% .2f % .2f % .2f)",
-		raw["b16"], raw["b18"], raw["b20"],
-		state.gpitch, state.gyaw, state.groll,
-		state.q1, state.q2, state.q3,
+		"GYRO-CALIB/usb  raw=(b16% 7d b18% 7d b20% 7d)  ->  rate "
+		"pitch=% 7d yaw=% 7d roll=% 7d  bias=(% 6.1f % 6.1f % 6.1f)  "
+		"rest=%4.1fs  |  EUREL deg (+ = nose-down / yaw-right / roll-right)  "
+		"pitch=% 8.2f yaw=% 8.2f roll=% 8.2f  |  accel unit=(% .2f % .2f % .2f)",
+		b16, b18, b20,
+		state.gpitch, state.gyaw, state.groll, bp, by, br,
+		controller._gyro_rest_time,
+		math.degrees(state.q1 / _EUREL_SCALE),
+		math.degrees(state.q2 / _EUREL_SCALE),
+		math.degrees(state.q3 / _EUREL_SCALE),
 		ax / mag, ay / mag, az / mag,
 	)
+
+
+class _DS5Orientation:
+	"""Absolute orientation from the gyro, shared by both DualSense transports.
+
+	This used to live on the Bluetooth controller alone. The USB path never had
+	it, and the difference was not benign: the C decoder leaves the raw
+	ACCELEROMETER in q1-q3 (AxisMode.DS4GYRO, negated), and with nothing to
+	overwrite them the mapper read three accelerometer components as though
+	they were euler angles. That is issue #16 -- the yaw slot carried accel X,
+	so it answered to roll, and the pitch slot answered to pitch with the wrong
+	sign. Yaw was not merely wrong but unobservable, gravity being no reference
+	for rotation about itself.
+
+	Both transports now integrate the same rates the same way, so a binding
+	behaves identically on the cable and off it.
+	"""
+
+	def _init_orientation(self):
+		self._gyro_bias = [0.0, 0.0, 0.0]  # pitch, yaw, roll -- see _debias_gyro
+		self._gyro_rest_time = 0.0
+		self._gyro_angles = [0.0, 0.0, 0.0]  # pitch, yaw, roll (radians)
+		self._delta_time = 0.0
+		self._previous_time = time.time()
+
+	def _tick_delta_time(self):
+		"""Seconds since the previous report, for callers that do not already
+		track it (the Bluetooth path computes its own before decoding)."""
+		now = time.time()
+		self._delta_time = now - self._previous_time
+		self._previous_time = now
+
+	def _debias_gyro(self, state, dt):
+		"""Returns the raw rates with the estimated zero-rate offset removed,
+		refining that estimate whenever the controller has been still for
+		_GYRO_REST_SECONDS. Rest is judged against the current estimate, so a
+		large offset still reads as "at rest" and gets corrected."""
+		raw = (state.gpitch, state.gyaw, state.groll)
+		bias = self._gyro_bias
+		if all(abs(r - b) < _GYRO_REST_LSB for r, b in zip(raw, bias)):
+			self._gyro_rest_time += dt
+			if self._gyro_rest_time > _GYRO_REST_SECONDS:
+				for i in (0, 1, 2):
+					bias[i] += (raw[i] - bias[i]) * _GYRO_BIAS_ALPHA
+		else:
+			self._gyro_rest_time = 0.0
+		return tuple(r - b for r, b in zip(raw, bias))
+
+	def _integrate_orientation(self, state):
+		"""Integrate the debiased rates into absolute euler angles (radians,
+		wrapped to [-pi, pi]) and write them to q1-q3 in EUREL units.
+
+		Each axis gets its own accumulator, exactly as the DS4 does. This
+		replaces composing a quaternion and decomposing it back into
+		Tait-Bryan angles, which was mathematically correct and behaviourally
+		wrong: that decomposition is SEQUENTIAL, so the three angles are not
+		independent measurements. Rotating about one physical axis moved all
+		three outputs -- gyro-to-mouse "yawed" diagonally, pitch bled sideways
+		-- and near the singularity the yaw and roll terms flipped sign, which
+		read as inverted axes in absolute mode. It also gimbal-locked from
+		about 75 deg of pitch. Integrating per axis has none of those: the
+		axes stay 1:1, and the DS4 comment says as much.
+
+		The trade is that this is not a true 3D orientation -- large compound
+		rotations do not compose correctly -- but for aiming, where the axes
+		are read independently anyway, decoupled beats geometrically exact.
+		It also puts this driver in the same shape as the DS4's, so the
+		accelerometer complementary filter can drop straight in later.
+		"""
+		gpitch, gyaw, groll = self._debias_gyro(state, self._delta_time)
+		# raw LSB -> radians over this frame
+		k = self._delta_time / _GYRO_LSB_PER_DEG_SEC * math.pi / 180.0
+		a = self._gyro_angles
+		a[0] = _wrap_pi(a[0] + gpitch * _GYRO_SIGN[0] * k)
+		a[1] = _wrap_pi(a[1] + gyaw * _GYRO_SIGN[1] * k)
+		a[2] = _wrap_pi(a[2] + groll * _GYRO_SIGN[2] * k)
+		state.q1 = int(a[0] * _EUREL_SCALE)
+		state.q2 = int(a[1] * _EUREL_SCALE)
+		state.q3 = int(a[2] * _EUREL_SCALE)
+		state.q4 = 0
 
 
 class OperatingMode(IntEnum):
@@ -300,7 +384,7 @@ ICON_COLORS = [
 ]
 
 
-class DS5Controller(HIDController):
+class DS5Controller(_DS5Orientation, HIDController):
 	# Most of axes are the same
 	BUTTON_MAP = (
 		SCButtons.X,
@@ -337,6 +421,7 @@ class DS5Controller(HIDController):
 			motor_right=0,
 		)
 		self._feedback_cancel_task = None
+		self._init_orientation()
 		super().__init__(device, daemon, handle, config_file, config, test_mode)
 
 	def _load_hid_descriptor(self, config, max_size, vid, pid, test_mode):
@@ -455,8 +540,12 @@ class DS5Controller(HIDController):
 					rng = STICK_PAD_MAX - STICK_PAD_MIN
 					st.cpad_x = max(STICK_PAD_MIN, min(STICK_PAD_MAX, STICK_PAD_MIN + st.cpad_x * rng // 1919))
 					st.cpad_y = max(STICK_PAD_MIN, min(STICK_PAD_MAX, STICK_PAD_MAX - st.cpad_y * rng // 1079))
+				st = self._decoder.state
+				self._tick_delta_time()
+				# Overwrites q1-q3, which until now held the raw accelerometer.
+				self._integrate_orientation(st)
 				if _CALIB:
-					_log_imu_calib_usb(self, data, self._decoder.state)
+					_log_imu_calib_usb(self, data, st)
 				self.mapper.input(self, self._decoder.old_state, self._decoder.state)
 
 	def feedback(self, data):
@@ -579,7 +668,7 @@ class DS5HidRawDriver:
 			return None
 
 
-class DS5HidRawController(Controller):
+class DS5HidRawController(_DS5Orientation, Controller):
 	class _DPadOutputValues:
 		def __init__(self, x, y):
 			self.x = x
@@ -649,8 +738,7 @@ class DS5HidRawController(Controller):
 		)
 		self._feedback_cancel_task = None
 		self._closed = False
-		self._gyro_bias = [0.0, 0.0, 0.0]  # pitch, yaw, roll -- see _debias_gyro
-		self._gyro_rest_time = 0.0
+		self._init_orientation()
 		self._outputs = {}
 		# Use empty struct for starting state
 		self._old_state = DualSenseBTControllerInput()
@@ -659,9 +747,6 @@ class DS5HidRawController(Controller):
 		self._hidrawdev = hidrawdev
 		self._fileno = hidrawdev._device.fileno()
 		self._id = self._generate_id() if driver else "-"
-		self._gyro_angles = [0.0, 0.0, 0.0]  # pitch, yaw, roll (radians)
-		self._delta_time = time.time()
-		self._previous_time = time.time()
 
 		# time.sleep(1)
 		self._set_operational()
@@ -957,55 +1042,8 @@ class DS5HidRawController(Controller):
 		result = int(tempRatio * STICK_PAD_RES + STICK_PAD_MIN)
 		return result
 
-	def _debias_gyro(self, state, dt):
-		"""Returns the raw rates with the estimated zero-rate offset removed,
-		refining that estimate whenever the controller has been still for
-		_GYRO_REST_SECONDS. Rest is judged against the current estimate, so a
-		large offset still reads as "at rest" and gets corrected."""
-		raw = (state.gpitch, state.gyaw, state.groll)
-		bias = self._gyro_bias
-		if all(abs(r - b) < _GYRO_REST_LSB for r, b in zip(raw, bias)):
-			self._gyro_rest_time += dt
-			if self._gyro_rest_time > _GYRO_REST_SECONDS:
-				for i in (0, 1, 2):
-					bias[i] += (raw[i] - bias[i]) * _GYRO_BIAS_ALPHA
-		else:
-			self._gyro_rest_time = 0.0
-		return tuple(r - b for r, b in zip(raw, bias))
-
 	def _integrate_orientation(self, state):
-		"""Integrate the debiased rates into absolute euler angles (radians,
-		wrapped to [-pi, pi]) and write them to q1-q3 in EUREL units.
-
-		Each axis gets its own accumulator, exactly as the DS4 does. This
-		replaces composing a quaternion and decomposing it back into
-		Tait-Bryan angles, which was mathematically correct and behaviourally
-		wrong: that decomposition is SEQUENTIAL, so the three angles are not
-		independent measurements. Rotating about one physical axis moved all
-		three outputs -- gyro-to-mouse "yawed" diagonally, pitch bled sideways
-		-- and near the singularity the yaw and roll terms flipped sign, which
-		read as inverted axes in absolute mode. It also gimbal-locked from
-		about 75 deg of pitch. Integrating per axis has none of those: the
-		axes stay 1:1, and the DS4 comment says as much.
-
-		The trade is that this is not a true 3D orientation -- large compound
-		rotations do not compose correctly -- but for aiming, where the axes
-		are read independently anyway, decoupled beats geometrically exact.
-		It also puts this driver in the same shape as the DS4's, so the
-		accelerometer complementary filter can drop straight in later.
-		"""
-		gpitch, gyaw, groll = self._debias_gyro(state, self._delta_time)
-		# raw LSB -> radians over this frame
-		k = self._delta_time / _GYRO_LSB_PER_DEG_SEC * math.pi / 180.0
-		a = self._gyro_angles
-		a[0] = _wrap_pi(a[0] + gpitch * _GYRO_SIGN[0] * k)
-		a[1] = _wrap_pi(a[1] + gyaw * _GYRO_SIGN[1] * k)
-		a[2] = _wrap_pi(a[2] + groll * _GYRO_SIGN[2] * k)
-		state.q1 = int(a[0] * _EUREL_SCALE)
-		state.q2 = int(a[1] * _EUREL_SCALE)
-		state.q3 = int(a[2] * _EUREL_SCALE)
-		state.q4 = 0
-
+		_DS5Orientation._integrate_orientation(self, state)
 		if _CALIB:
 			_log_imu_calib(self, state, self._delta_time)
 
