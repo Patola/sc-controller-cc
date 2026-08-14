@@ -60,6 +60,22 @@ everything else landed as submitted.
 - **Scheduler task ordering.** `Task.__lt__` was missing its `return`, so it
   always compared as false and the priority queue ordered tasks arbitrarily.
 
+### Fixed
+
+- **OSD menu navigation with a stick.** Nudging the stick scrolled far too
+  fast, and holding it fully deflected stopped the list dead. Both were the
+  same fault: menus feed the stick and the d-pad into one pacer, so the d-pad
+  sitting at rest kept cancelling the repeat the stick was driving. Movement
+  then happened only on changes — once per controller report — and stopped
+  entirely once the stick was held still. Each input is now tracked
+  separately and the one deflected furthest wins.
+- **The DualSense's sticks rest at centre.** Released sticks sat at roughly
+  1500 of 32767 instead of 0, so a menu or a bound mouse drifted on its own.
+  The deadzone was too narrow over USB and absent entirely over Bluetooth.
+- **A stalled USB control write is reported.** It was discarded silently,
+  which made a controller that had stopped accepting commands look like one
+  that was simply ignoring the configuration.
+
 ## [0.6.0.8] - 2026-08-11
 
 Two headline areas: the Steam Controller 2's haptics go from a single fixed
