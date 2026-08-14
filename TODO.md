@@ -329,6 +329,15 @@ Two halves, of very different sizes:
     `archlinux` container job running `makepkg` as a non-root user. Real work,
     but it is the only way this stops depending on one maintainer's machine.
 
+Native `.deb` and `.rpm` packages are wanted but not urgent, tracked in
+[#19](https://github.com/Patola/sc-controller-cc/issues/19). Read that before
+starting: the Fedora and resolute entries in `appimage.yml` are test targets,
+not build environments, so there is nothing there to reuse -- and one `.deb`
+is not deb support, since it will not install on a distro it was not built
+for. COPR/OBS give a repository and one spec instead of N per-distro CI jobs.
+This should wait until the hand-attached assets above are automated;
+otherwise it makes that problem worse.
+
 `package.nix` joined the attached assets in v0.6.0.9, and it cannot be
 automated the same way: its `hash` is taken over the released tag's own source
 tree, so it does not exist until the tag does. The bump therefore always lands
@@ -337,7 +346,14 @@ in a commit *after* the tag it describes. Getting the value needs either nix
 computes the NAR hash directly for machines without nix. Run that script's
 `--self-test` first, every time: it reproduces a hash nix itself produced, and
 it is the only thing standing between a subtly wrong serialization and a
-confident wrong hash that breaks the next person's build.
+confident wrong hash that breaks the next person's build. The hash the script
+produced for v0.6.0.9 was accepted by `fetchFromGitHub` unchanged, so the
+route is confirmed against a real build, not only against its own self-test.
+
+When cutting the next release, **drop the `install -Dm644 ... input-event-codes.h
+scc/input-event-codes.h` line from `postFixup` in `package.nix`**. It works
+around a test that only misbehaves in v0.6.0.9 and earlier; the test itself is
+fixed, so from the next tag the line is dead weight.
 
 Worth writing down at the same time: the release procedure itself. v0.6.0.8
 took four attempts, three of them because the test suite passes in an
