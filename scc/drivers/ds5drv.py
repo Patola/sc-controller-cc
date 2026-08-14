@@ -80,6 +80,17 @@ _GYRO_BIAS_ALPHA = 0.01  # per-sample blend once adapting
 # that path integrated, so small-angle behaviour is unchanged.
 _GYRO_SIGN = (-1.0, 1.0, 1.0)
 
+# Stick deadzone, in raw units either side of centre (the sticks report 0-255).
+# The DualSense's mechanical centre sits several units off and settles only
+# after the stick has been worked; measured resting offsets reached ~6 units,
+# which at the old value of 2 passed straight through and became ~1500 of 32767
+# on the output -- constant slow drift in any game. The DualShock 4 uses 10 and
+# does not show it. Shared by both transports on purpose: the USB path feeds it
+# to the C decoder, the Bluetooth path applies it in _stick_axis_scale, and
+# before this the Bluetooth path had no deadzone at all.
+# A per-device centre calibration would be the real answer; this is the floor.
+_STICK_DEADZONE = 10
+
 
 def _wrap_pi(angle: float) -> float:
 	"""Wrap radians into [-pi, pi]."""
@@ -309,20 +320,20 @@ class DS5Controller(HIDController):
 			mode=AxisMode.AXIS,
 			byte_offset=1,
 			size=8,
-			data=AxisDataUnion(axis=AxisModeData(scale=2.0/255, offset=-1.0, clamp_min=STICK_PAD_MIN, clamp_max=STICK_PAD_MAX, deadzone=2*2.0/255)),
+			data=AxisDataUnion(axis=AxisModeData(scale=2.0/255, offset=-1.0, clamp_min=STICK_PAD_MIN, clamp_max=STICK_PAD_MAX, deadzone=_STICK_DEADZONE * 2.0/255)),
 		)
 		self._decoder.axes[AxisType.AXIS_STICK_Y] = AxisData(
 			mode=AxisMode.AXIS,
 			byte_offset=2,
 			size=8,
-			data=AxisDataUnion(axis=AxisModeData(scale=-2.0/255, offset=1.0, clamp_min=STICK_PAD_MIN, clamp_max=STICK_PAD_MAX, deadzone=2*2.0/255)),
+			data=AxisDataUnion(axis=AxisModeData(scale=-2.0/255, offset=1.0, clamp_min=STICK_PAD_MIN, clamp_max=STICK_PAD_MAX, deadzone=_STICK_DEADZONE * 2.0/255)),
 		)
 		self._decoder.axes[AxisType.AXIS_RPAD_X] = AxisData(
 			mode=AxisMode.AXIS,
 			byte_offset=3,
 			size=8,
 			data=AxisDataUnion(
-				axis=AxisModeData(button=SCButtons.RPADTOUCH, scale=2.0/255, offset=-1.0, clamp_min=STICK_PAD_MIN, clamp_max=STICK_PAD_MAX, deadzone=2*2.0/255),
+				axis=AxisModeData(button=SCButtons.RPADTOUCH, scale=2.0/255, offset=-1.0, clamp_min=STICK_PAD_MIN, clamp_max=STICK_PAD_MAX, deadzone=_STICK_DEADZONE * 2.0/255),
 			),
 		)
 		self._decoder.axes[AxisType.AXIS_RPAD_Y] = AxisData(
@@ -330,7 +341,7 @@ class DS5Controller(HIDController):
 			byte_offset=4,
 			size=8,
 			data=AxisDataUnion(
-				axis=AxisModeData(button=SCButtons.RPADTOUCH, scale=-2.0/255, offset=1.0, clamp_min=STICK_PAD_MIN, clamp_max=STICK_PAD_MAX, deadzone=2*2.0/255),
+				axis=AxisModeData(button=SCButtons.RPADTOUCH, scale=-2.0/255, offset=1.0, clamp_min=STICK_PAD_MIN, clamp_max=STICK_PAD_MAX, deadzone=_STICK_DEADZONE * 2.0/255),
 			),
 		)
 
@@ -878,6 +889,10 @@ class DS5HidRawController(Controller):
 		return state
 
 	def _stick_axis_scale(self, value, invert=False, test=False):
+		if abs(value - 128) <= _STICK_DEADZONE:
+			# Dead centre. Without this a stick resting a few units off centre
+			# drifts forever; see _STICK_DEADZONE.
+			return 0
 		result = value - 128
 		tempRatio = (result / 127.0) if (value >= 128) else (result / (128.0))
 		if invert:

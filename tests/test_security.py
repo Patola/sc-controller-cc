@@ -2,9 +2,13 @@
 
 import pytest
 
-from scc.sccdaemon import SafeTalkingActionParser
 from scc.scheduler import Task
 from scc.tools import find_menu, find_profile
+
+# scc.sccdaemon reaches ioctl_opt (via device_monitor), a real runtime
+# dependency a minimal build environment may not have installed yet. Not being
+# able to check the parser there is a skip, not a collection failure.
+SafeTalkingActionParser = pytest.importorskip("scc.sccdaemon").SafeTalkingActionParser
 
 
 class TestSafeParser:
@@ -112,3 +116,52 @@ class TestSchedulerOrdering:
 		t2 = Task(1.0, 1, lambda: None, ())
 		assert (t1 < t2) is True
 		assert (t2 < t1) is False
+
+
+class TestDS5StickDeadzone:
+	"""Both DualSense transports must swallow the same resting offset.
+
+	The pad's mechanical centre sits several raw units off and only settles
+	after the stick is worked. At the old value of 2 that reached the output as
+	~1500 of 32767 -- constant drift -- and the Bluetooth path applied no
+	deadzone whatsoever.
+	"""
+
+	def _ds5(self):
+		try:
+			import scc.drivers.ds5drv as ds5
+		except (ImportError, OSError) as e:
+			pytest.skip("ds5drv is not importable here: %s" % e)
+		return ds5
+
+	def test_the_deadzone_covers_a_realistic_resting_offset(self):
+		"""~6 raw units was measured on hardware; anything at or under the
+		deadzone must reach the output as exactly zero.
+		"""
+		ds5 = self._ds5()
+		assert ds5._STICK_DEADZONE >= 8, "too small to cover the observed offset"
+		assert ds5._STICK_DEADZONE <= 20, "so wide the stick would feel dead"
+
+	def test_bluetooth_centres_a_resting_stick(self):
+		ds5 = self._ds5()
+		scale = ds5.DS5HidRawController._stick_axis_scale
+		for raw in range(128 - ds5._STICK_DEADZONE, 128 + ds5._STICK_DEADZONE + 1):
+			assert scale(None, raw) == 0, "raw %d drifts over Bluetooth" % raw
+
+	def test_bluetooth_still_reaches_both_extremes(self):
+		ds5 = self._ds5()
+		from scc.constants import STICK_PAD_MAX, STICK_PAD_MIN
+
+		scale = ds5.DS5HidRawController._stick_axis_scale
+		assert scale(None, 255) == STICK_PAD_MAX
+		assert scale(None, 0) == STICK_PAD_MIN
+		# and just outside the deadzone it is live again, not stuck at 0
+		assert scale(None, 128 + ds5._STICK_DEADZONE + 1) > 0
+		assert scale(None, 128 - ds5._STICK_DEADZONE - 1) < 0
+
+	def test_both_transports_share_one_value(self):
+		"""They are separate code paths; a single constant keeps them honest."""
+		ds5 = self._ds5()
+		src = open(ds5.__file__).read()
+		assert "deadzone=2*2.0/255" not in src, "a hardcoded deadzone crept back"
+		assert src.count("_STICK_DEADZONE") >= 6
