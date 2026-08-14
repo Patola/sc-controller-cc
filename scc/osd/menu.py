@@ -537,18 +537,27 @@ class Menu(OSDWindow):
 				side = "BOTH"
 			self.feedback = side, int(self.args.feedback_amplitude)
 
+		# Whether the d-pad navigates as well is a property of the config and
+		# the hardware, so it is decided here rather than in lock_inputs(). A
+		# submenu reuses its parent's lock and so never calls lock_inputs --
+		# when this lived there, every submenu came up with the flag clear and
+		# ignored the d-pad, while the stick kept working because it matches
+		# _control_with directly.
+		self._control_with_dpad = (
+			self._control_with == STICK
+			and controller.get_flags() & ControllerFlags.HAS_DPAD != 0
+		)
+
 	def lock_inputs(self):
 		def success(*a):
 			self._on_inputs_locked()
 
 		locks = [self._control_with, self._confirm_with, self._cancel_with]
-		if self._control_with == STICK:
-			if self.controller.get_flags() & ControllerFlags.HAS_DPAD != 0:
-				self._control_with_dpad = True
-				# Both, because which one the d-pad arrives on is hardware
-				# dependent -- see _is_control_event. A controller only ever
-				# produces one of them, and locking the other is harmless.
-				locks += [LEFT, DPAD]
+		if self._control_with_dpad:
+			# Both, because which one the d-pad arrives on is hardware
+			# dependent -- see _is_control_event. A controller only ever
+			# produces one of them, and locking the other is harmless.
+			locks += [LEFT, DPAD]
 		self.controller.lock(success, self.on_failed_to_lock, *locks)
 
 	def _is_control_event(self, what) -> bool:

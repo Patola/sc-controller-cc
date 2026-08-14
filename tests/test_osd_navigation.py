@@ -104,6 +104,82 @@ def test_callers_with_a_single_input_are_unaffected(pacer):
 	assert pacer.timers[-1] == "cancel"
 
 
+def test_a_submenu_accepts_the_dpad_too():
+	"""A submenu reuses its parent's input lock and so never calls
+	lock_inputs(). While _control_with_dpad was set in there, every submenu
+	came up with it clear and ignored the d-pad -- the stick still worked,
+	because it matches _control_with directly, so the main menu looked fine and
+	only submenus ('All profiles') were dead. Deciding it in use_controller,
+	which submenus DO call, is what makes them agree.
+	"""
+	import gi
+
+	gi.require_version("Gtk", "3.0")
+	from scc.constants import DPAD, LEFT, STICK, ControllerFlags
+	from scc.osd.menu import Menu
+
+	class FakeConfig:
+		def get_controller_config(self, id):
+			return {"menu_control": STICK, "menu_cancel": "B", "menu_confirm": "A"}
+
+	class FakeArgs:
+		control_with = STICK
+		cancel_with = "B"
+		confirm_with = "A"
+
+	class FakeController:
+		def get_id(self):
+			return "sc2"
+
+		def get_flags(self):
+			return ControllerFlags.HAS_DPAD
+
+	class FakeSubmenu:
+		config = FakeConfig()
+		args = FakeArgs()
+		_control_with_dpad = False       # as a fresh menu starts out
+
+	m = FakeSubmenu()
+	Menu.use_controller(m, FakeController())   # and NOT lock_inputs()
+
+	assert m._control_with_dpad, "use_controller must decide this, not lock_inputs"
+	for source in (DPAD, LEFT):
+		assert Menu._is_control_event(m, source), (
+			"a submenu ignored the d-pad arriving as %r" % (source,))
+
+
+def test_a_pad_without_a_dpad_does_not_pretend_to_have_one():
+	"""The flag has to stay off where it was off before, or LEFT-as-d-pad would
+	start navigating on controllers whose LEFT is a touchpad.
+	"""
+	import gi
+
+	gi.require_version("Gtk", "3.0")
+	from scc.constants import DPAD, STICK
+	from scc.osd.menu import Menu
+
+	class FakeConfig:
+		def get_controller_config(self, id):
+			return {"menu_control": STICK, "menu_cancel": "B", "menu_confirm": "A"}
+
+	class FakeArgs:
+		control_with = STICK
+		cancel_with = "B"
+		confirm_with = "A"
+
+	class FakeController:
+		def get_id(self):
+			return "sc1"
+
+		def get_flags(self):
+			return 0
+
+	m = type("M", (), {"config": FakeConfig(), "args": FakeArgs(), "_control_with_dpad": False})()
+	Menu.use_controller(m, FakeController())
+	assert not m._control_with_dpad
+	assert not Menu._is_control_event(m, DPAD)
+
+
 def test_the_menu_tells_the_pacer_which_input_an_event_came_from():
 	"""The wiring, not just the pacer.
 
