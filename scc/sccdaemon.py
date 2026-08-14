@@ -1302,7 +1302,7 @@ class ReportingAction(Action):
 		min_difference = self.MIN_DIFFERENCE
 		if what == CPAD:
 			min_difference /= 10
-		if x == 0 or y == 0 or abs(x - self.old_pos[0]) > min_difference or abs(y - self.old_pos[1] > min_difference):
+		if x == 0 or y == 0 or abs(x - self.old_pos[0]) > min_difference or abs(y - self.old_pos[1]) > min_difference:
 			self.old_pos = x, y
 			if mapper.get_controller():
 				self._report("Event: %s %s %s %s\n" % (mapper.get_controller().get_id(), what, x, y))
@@ -1350,6 +1350,11 @@ class ReplacedAction(LockedAction):
 		ReportingAction.__init__(self, what, client)
 		self.original_action = original_action
 		self.new_action = new_action.compress()
+		if what in SCButtons.__members__.values() and self.mapper and (self.mapper.buttons & what):
+			try:
+				original_action.button_release(self.mapper)
+			except Exception as e:
+				log.warning("Failed to release held action while replacing %s: %s", what, e)
 		original_action.cancel(self.mapper)
 		self._store_lock()
 		log.debug("%s replaced by %s", self.what, self.client)
@@ -1361,10 +1366,10 @@ class ReplacedAction(LockedAction):
 		self.new_action.trigger(mapper, position, old_position)
 
 	def button_press(self, mapper, number=1):
-		self.new_action.button_press(mapper, mapper)
+		self.new_action.button_press(mapper)
 
 	def button_release(self, mapper):
-		self.new_action.button_release(mapper, mapper)
+		self.new_action.button_release(mapper)
 
 	def whole(self, mapper, x, y, what):
 		self.new_action.whole(mapper, x, y, what)
