@@ -20,12 +20,16 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def make_editor(ctype="sc2", flags=None):
+def make_editor(ctype="sc2", flags=None, connected=True):
 	"""Builds a real ActionEditor against a stub app.
 
 	`flags` is what the daemon would report for the connected controller; the
 	editor uses it to decide, among other things, whether the RIGHT pad slot is
 	really a stick.
+
+	`connected=False` is the switcher with no controller on it -- the pad is
+	switched off, or the daemon is not running. That is a third state, distinct
+	from a controller that is present but lacks a capability.
 	"""
 	import gi
 
@@ -48,7 +52,7 @@ def make_editor(ctype="sc2", flags=None):
 
 	class FakeSwitcher:
 		def get_controller(self):
-			return FakeController()
+			return FakeController() if connected else None
 
 	class FakeApp:
 		gladepath = os.path.join(os.getcwd(), "glade")
@@ -154,6 +158,51 @@ def test_loading_an_effect_restores_the_widgets(editor):
 	assert editor._row_value("tone_frequency") == 220
 	assert editor._row_value("duration") == 300
 	assert editor.feedback_params["lfo_depth"] == 128
+
+
+def test_the_effect_chooser_survives_a_sleeping_controller():
+	"""Editing a profile with the pad switched off is an ordinary thing to do.
+
+	The chooser is hidden on hardware that cannot synthesise effects, which is
+	right -- but "no controller attached" was being treated as "controller
+	without the capability", so the whole Effect row vanished from the Feedback
+	tab whenever the pad was off or the daemon was not running. Nothing about
+	an absent controller says the profile is not for a Steam Controller 2.
+	"""
+	editor = make_editor(connected=False)
+	assert editor._feedback_effects_supported, (
+		"the Effect chooser disappears when no controller is attached")
+	assert editor._cbFeedbackEffect.get_visible()
+	assert editor._lblFeedbackEffect.get_visible()
+
+
+def test_a_controller_that_cannot_do_effects_still_hides_them():
+	"""The other side of it: a KNOWN incapable controller must keep hiding the
+	chooser, or the fix above would just delete the feature it guards.
+	"""
+	editor = make_editor(ctype="ds4")
+	assert not editor._feedback_effects_supported
+	assert not editor._cbFeedbackEffect.get_visible()
+
+
+def test_a_saved_effect_is_not_flattened_by_editing_it_offline():
+	"""The part that would have been worse than a missing widget.
+
+	Open a saved Tone with no controller attached and press OK: the binding
+	must come back as a Tone, not silently rewritten to a plain click.
+	"""
+	from scc.actions import MouseAction
+	from scc.constants import HapticEffect, HapticPos
+	from scc.modifiers import FeedbackToneModifier
+	from scc.profile import Profile
+
+	editor = make_editor(connected=False)
+	action = FeedbackToneModifier(HapticPos.RIGHT, 512, 220, 300, 4, 128, MouseAction())
+	editor.set_input(Profile.RPAD, action)
+
+	assert editor.feedback_effect == HapticEffect.TONE
+	editor.update_modifiers()
+	assert editor.generate_modifiers(editor._action).to_string() == action.to_string()
 
 
 def test_preset_row_is_a_named_dropdown(editor):
