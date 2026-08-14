@@ -35,6 +35,24 @@ List of (possibly) planned features in no particular order:
   for the autoswitcher) are broken on Wayland regardless of toolkit version and
   need per-compositor work (KWin DBus/scripting, wlr-foreign-toplevel).
 
+- Brainstorm alongside the GTK4 port (evaluation only, may lead nowhere): how
+  the editor decides which options a controller can actually use. Today it
+  asks the *connected* controller's type, one capability at a time -- see
+  has_haptic_effects and right_slot_is_stick in scc/gui/ae/__init__.py. That
+  has already produced two bugs of the same shape: the Effect chooser
+  vanishing when no controller was attached (df7ea3d4), and Trackball Mode
+  offered on a stick. The current answer for "no controller" is to assume the
+  most capable hardware, which is right for a profile editor but means the
+  Feedback tab can offer Steam Controller 2 effects to someone who will run
+  the profile on a DualShock 4, where they degrade to a plain click.
+  Questions worth asking then, not now: should a profile record which
+  controller it was written for? Should unsupported options be shown disabled
+  with a reason rather than hidden, so the difference between "your hardware
+  cannot do this" and "this does not exist" is visible? Is a per-controller
+  capability table (rather than type-name checks scattered per feature) worth
+  it? Answering these while rebuilding the dialogs is far cheaper than doing
+  it twice.
+
 - Fix the TRIXIE AppImage segfault on newest-glibc distros. The
   debian-trixie-based AppImage (a CI artifact; releases ship the jammy pair)
   segfaults (SIGSEGV, exit 245) during AppRun dependency-check when run on
