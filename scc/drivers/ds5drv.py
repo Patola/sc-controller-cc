@@ -73,12 +73,12 @@ _GYRO_REST_SECONDS = 0.5  # how long it has to stay there before we adapt, so a
 _GYRO_BIAS_ALPHA = 0.01  # per-sample blend once adapting
 
 # Per-axis (pitch, yaw, roll) sign taking the raw rates to the EUREL angle
-# convention: + at nose-down / yaw-right / roll-right. _convert_input_data
-# already negates gyaw and groll (but not gpitch) on the way in, so only pitch
-# needs flipping here -- which is the same asymmetry the quaternion path landed
-# on once it was verified against hardware, and these integrate the same rates
-# that path integrated, so small-angle behaviour is unchanged.
-_GYRO_SIGN = (-1.0, 1.0, 1.0)
+# convention: + at nose-down / yaw-right / roll-right. Measured on hardware --
+# a nose-down, yaw-right or roll-right rotation each drives its raw word
+# negative, so all three flip. Same table as the DS4, and now for the same
+# reason: the rates reach the mapper untouched on both, so the two controllers
+# agree about what a positive yaw is.
+_GYRO_SIGN = (-1.0, -1.0, -1.0)
 
 # Stick deadzone, in raw units either side of centre (the sticks report 0-255).
 # The DualSense's mechanical centre sits several units off and settles only
@@ -905,9 +905,16 @@ class DS5HidRawController(Controller):
 			state.buttons |= SCButtons.CPADPRESS
 
 		# Change gyro dir values to match Steam Controller
+		# Raw, unnegated -- like the DS4's decoder, and for the same reason:
+		# these fields ARE the absolute-mode mouse input (GyroAbsAction applies
+		# GyroAction.MOUSE_RATE_SIGN to them), and that sign table is shared
+		# with the DS4. Negating here made yaw and roll come out backwards in
+		# absolute mode while relative mode, which reads the integrated angles
+		# instead, looked perfect. The negation now lives in _GYRO_SIGN, which
+		# only the integration consumes.
 		state.gpitch = ctypes.c_int16((data[18] << 8) | data[17]).value
-		state.gyaw = ctypes.c_int16((data[20] << 8) | data[19]).value * -1
-		state.groll = ctypes.c_int16((data[22] << 8) | data[21]).value * -1
+		state.gyaw = ctypes.c_int16((data[20] << 8) | data[19]).value
+		state.groll = ctypes.c_int16((data[22] << 8) | data[21]).value
 
 		# Change accel axes to match Steam Controller (flip pitch and roll)
 		# Scale values for 2G instead of 1G
