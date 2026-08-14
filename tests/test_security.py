@@ -1,5 +1,7 @@
 """Regression tests for security fixes from the 2026-08-12 audit."""
 
+import pytest
+
 from scc.sccdaemon import SafeTalkingActionParser
 from scc.scheduler import Task
 from scc.tools import find_menu, find_profile
@@ -71,16 +73,27 @@ class TestPathValidation:
 
 
 class TestHIDDecoderPacketSize:
-	"""Drivers that build HIDDecoder manually must set packet_size."""
+	"""Drivers that build HIDDecoder manually must set packet_size.
+
+	hiddrv loads the compiled libhiddrv at import time and raises OSError -- not
+	ImportError -- when it has not been built, so importorskip alone does not
+	cover it. CI does not build the extension; not being able to check this
+	there is a skip, not a failure.
+	"""
+
+	@staticmethod
+	def _decoder():
+		try:
+			from scc.drivers.hiddrv import HIDDecoder
+		except (ImportError, OSError) as e:
+			pytest.skip("libhiddrv is not built here: %s" % e)
+		return HIDDecoder()
 
 	def test_default_packet_size_is_zero(self):
-		from scc.drivers.hiddrv import HIDDecoder
-		d = HIDDecoder()
-		assert d.packet_size == 0
+		assert self._decoder().packet_size == 0
 
 	def test_ds4_sets_packet_size(self):
-		from scc.drivers.hiddrv import HIDDecoder
-		d = HIDDecoder()
+		d = self._decoder()
 		d.packet_size = 64
 		assert d.packet_size == 64
 
