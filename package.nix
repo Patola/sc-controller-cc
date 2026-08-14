@@ -47,11 +47,13 @@
 #   With nix:     set `hash` to lib.fakeHash, run `home-manager switch`, and
 #                 paste the real value from the "got:" line of the mismatch.
 #
-#   Without nix:  ./scripts/nar-hash.py --self-test v0.6.0.9
+#   Without nix:  scripts/nar-hash.py --self-test v0.6.0.9
 #                 The self-test proves the script against a hash nix itself
 #                 produced before it prints a new one; do not skip it, since
 #                 a wrong serialization yields a plausible wrong hash that
-#                 only breaks for whoever builds next.
+#                 only breaks for whoever builds next. That script landed
+#                 after the v0.6.0.9 tag, so it is not in that tag's tree:
+#                 https://github.com/Patola/sc-controller-cc/blob/main/scripts/nar-hash.py
 #
 # Either way this can only happen AFTER the release is tagged -- the hash is
 # taken over the tag's own source tree -- so the bump always lands in a commit
@@ -187,18 +189,26 @@ python3.pkgs.buildPythonApplication rec {
     # tree: `python -P` drops the build cwd (which still holds ./scc) from
     # sys.path so `import scc` resolves via PYTHONPATH to $out. The X11/udev/
     # bluetooth libs scc dlopens at import must be reachable, hence LD_LIBRARY_PATH.
+    # REMOVE once `version` is past 0.6.0.9. In 0.6.0.9 and earlier,
+    # test_the_driver_imports_without_python_evdev spawns `python -c`, which
+    # prepends the build cwd ahead of PYTHONPATH -- so that child imports the
+    # SOURCE scc rather than the one from $out, and the source copy has no
+    # bundled input-event-codes.h. scc/uinput.py then falls through to
+    # /usr/include, which no sandbox has, and the gate fails on linux/input.h.
+    # Giving the source tree a copy too satisfies it. Fixed properly in the
+    # test as of 88da5205, so this stops being needed at the next release.
+    install -Dm644 ${linuxHeaders}/include/linux/input-event-codes.h \
+      scc/input-event-codes.h
+
     echo "Running post-install test suite..."
     PYTHONPATH="$out/${python3.sitePackages}''${PYTHONPATH:+:$PYTHONPATH}" \
     SCC_SHARED="$out/share/scc" \
     LD_LIBRARY_PATH="${lib.makeLibraryPath runtimeLibraries}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
     python -P -m pytest -q --import-mode=importlib tests/ \
-      `# GUI test needs a display / GTK; skip it in the sandbox` \
-      --ignore=tests/test_setup.py \
-      `# three pre-existing upstream test-suite gaps (a missing "inverted"` \
-      `# modifier test + an action-doc coverage gap), unrelated to packaging:` \
-      --deselect 'tests/test_docs.py::TestDocs::test_every_action_has_docs' \
-      --deselect 'tests/test_parser/test_modifiers.py::TestModifiers::test_tests' \
-      --deselect 'tests/test_profile/test_modifiers.py::TestModifiers::test_tests'
+      `# GUI test needs a display / GTK; skip it in the sandbox. Still required:` \
+      `# the gate's bare interpreter has no GI_TYPELIB_PATH (the wrapper supplies` \
+      `# it at runtime), so this fails with "Namespace Gtk not available".` \
+      --ignore=tests/test_setup.py
   '';
 
   # buildPythonApplication does its own console-script wrapping, so disable the
