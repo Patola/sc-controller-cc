@@ -140,6 +140,46 @@ def _log_imu_calib(controller, state, dt) -> None:
 	)
 
 
+def _s16le(data, offset: int) -> int:
+	"""Signed 16-bit little-endian at `offset`, the DualSense's IMU word format."""
+	return ctypes.c_int16((data[offset + 1] << 8) | data[offset]).value
+
+
+def _log_imu_calib_usb(controller, data, state) -> None:
+	"""The same dump as _log_imu_calib, for the USB (libusb) path.
+
+	That one hangs off DS5HidRawController and so only ever sees Bluetooth,
+	which is unhelpful for the report that motivated it: over USB the gyro
+	arrives already decoded by the C extension, through a different set of
+	byte offsets, and nothing printed it.
+
+	Prints the report's raw IMU words next to the axis each was decoded into,
+	so rotating about one physical axis at a time says which raw slot moved
+	and which named axis it reached. That distinguishes a swapped pair from a
+	wrong sign, which the symptom alone ('yaw acts as roll, pitch inverted')
+	does not.
+	"""
+	now = time.time()
+	if now - getattr(controller, "_calib_last_t", 0.0) < 0.25:
+		return
+	controller._calib_last_t = now
+	# Offsets are the ones _load_hid_descriptor decodes from, deliberately: if
+	# they are wrong, this prints wrong in the same way and stays honest.
+	raw = {name: _s16le(data, off) for name, off in (
+		("b16", 16), ("b18", 18), ("b20", 20))}
+	ax, ay, az = (_s16le(data, off) for off in (22, 24, 26))
+	mag = math.sqrt(ax * ax + ay * ay + az * az) or 1.0
+	log.info(
+		"GYRO-CALIB/usb  raw=(b16% 7d b18% 7d b20% 7d)  ->  decoded "
+		"pitch=% 7d yaw=% 7d roll=% 7d  |  q=(% 7d % 7d % 7d)  "
+		"accel unit=(% .2f % .2f % .2f)",
+		raw["b16"], raw["b18"], raw["b20"],
+		state.gpitch, state.gyaw, state.groll,
+		state.q1, state.q2, state.q3,
+		ax / mag, ay / mag, az / mag,
+	)
+
+
 class OperatingMode(IntEnum):
 	DS4_COMPATIBILITY_MODE = 1 << 0
 	DS5_MODE = 1 << 1
@@ -415,6 +455,8 @@ class DS5Controller(HIDController):
 					rng = STICK_PAD_MAX - STICK_PAD_MIN
 					st.cpad_x = max(STICK_PAD_MIN, min(STICK_PAD_MAX, STICK_PAD_MIN + st.cpad_x * rng // 1919))
 					st.cpad_y = max(STICK_PAD_MIN, min(STICK_PAD_MAX, STICK_PAD_MAX - st.cpad_y * rng // 1079))
+				if _CALIB:
+					_log_imu_calib_usb(self, data, self._decoder.state)
 				self.mapper.input(self, self._decoder.old_state, self._decoder.state)
 
 	def feedback(self, data):
