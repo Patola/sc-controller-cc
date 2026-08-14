@@ -41,9 +41,21 @@
 # are needed; on other systems, copy that file into /etc/udev/rules.d (as root)
 # if a non-Valve controller needs write access.
 #
-# To bump the version: change `rev` (and `version`), set `hash` to
-# lib.fakeHash, run `home-manager switch`, then paste the real hash from the
-# "got:" line of the mismatch error.
+# To bump the version: change `version` (`rev` follows it), then get the hash
+# one of two ways.
+#
+#   With nix:     set `hash` to lib.fakeHash, run `home-manager switch`, and
+#                 paste the real value from the "got:" line of the mismatch.
+#
+#   Without nix:  ./scripts/nar-hash.py --self-test v0.6.0.9
+#                 The self-test proves the script against a hash nix itself
+#                 produced before it prints a new one; do not skip it, since
+#                 a wrong serialization yields a plausible wrong hash that
+#                 only breaks for whoever builds next.
+#
+# Either way this can only happen AFTER the release is tagged -- the hash is
+# taken over the tag's own source tree -- so the bump always lands in a commit
+# after the tag, never in it.
 { lib
 , fetchFromGitHub
 , python3

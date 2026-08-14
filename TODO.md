@@ -329,6 +329,16 @@ Two halves, of very different sizes:
     `archlinux` container job running `makepkg` as a non-root user. Real work,
     but it is the only way this stops depending on one maintainer's machine.
 
+`package.nix` joined the attached assets in v0.6.0.9, and it cannot be
+automated the same way: its `hash` is taken over the released tag's own source
+tree, so it does not exist until the tag does. The bump therefore always lands
+in a commit *after* the tag it describes. Getting the value needs either nix
+(`lib.fakeHash`, build, read the mismatch) or `scripts/nar-hash.py`, which
+computes the NAR hash directly for machines without nix. Run that script's
+`--self-test` first, every time: it reproduces a hash nix itself produced, and
+it is the only thing standing between a subtly wrong serialization and a
+confident wrong hash that breaks the next person's build.
+
 Worth writing down at the same time: the release procedure itself. v0.6.0.8
 took four attempts, three of them because the test suite passes in an
 environment neither CI nor the AppImage build has -- CI has no compiled
