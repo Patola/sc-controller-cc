@@ -22,7 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Version numbers follow the upstream release they diverged from, with a fourth
 component for this fork's own releases.
 
-## [Unreleased]
+## [0.6.0.9] - 2026-08-14
 
 ### Security
 
@@ -75,6 +75,22 @@ everything else landed as submitted.
 - **A stalled USB control write is reported.** It was discarded silently,
   which made a controller that had stopped accepting commands look like one
   that was simply ignoring the configuration.
+- **Gyroscope orientation works on a wired DualSense.** Absolute gyro,
+  lean-to-turn and tilt all read the controller's orientation, and over USB
+  that orientation was three raw accelerometer components rather than angles:
+  the yaw axis answered to roll, pitch ran backwards, and yaw itself could not
+  work at all, gravity being no reference for rotation about itself. The wired
+  path now integrates the gyro exactly as the Bluetooth path and the
+  DualShock 4 already did.
+- **Absolute-mode gyro axes on the DualSense point the right way.** Yaw and
+  roll came out reversed on both transports, because the driver negated its
+  angular rates before the mapper -- which reads them through a sign table
+  shared with the DualShock 4. Relative mode was unaffected and looked
+  correct, which is what hid this.
+- **The d-pad navigates OSD submenus.** In menus like "All profiles" it did
+  nothing, while the stick worked there and the d-pad worked in the menu
+  above it. A submenu reuses its parent's input lock and so skipped the step
+  that enabled d-pad control.
 
 ## [0.6.0.8] - 2026-08-11
 
@@ -169,4 +185,5 @@ the DualShock 4 over Bluetooth becomes properly usable.
 - Verified on the Steam Controller 2 and the DualShock 4. The DualSense, Steam
   Controller v1 and Steam Deck have not been re-tested against this release.
 
+[0.6.0.9]: https://github.com/Patola/sc-controller-cc/releases/tag/v0.6.0.9
 [0.6.0.8]: https://github.com/Patola/sc-controller-cc/releases/tag/v0.6.0.8
