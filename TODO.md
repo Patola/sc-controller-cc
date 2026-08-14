@@ -368,10 +368,8 @@ confident wrong hash that breaks the next person's build. The hash the script
 produced for v0.6.0.9 was accepted by `fetchFromGitHub` unchanged, so the
 route is confirmed against a real build, not only against its own self-test.
 
-When cutting the next release, **drop the `install -Dm644 ... input-event-codes.h
-scc/input-event-codes.h` line from `postFixup` in `package.nix`**. It works
-around a test that only misbehaves in v0.6.0.9 and earlier; the test itself is
-fixed, so from the next tag the line is dead weight.
+(The v0.6.0.9-only `input-event-codes.h` workaround in `postFixup` was dropped
+in v0.6.0.10, once the tag contained the fixed test.)
 
 Worth writing down at the same time: the release procedure itself. v0.6.0.8
 took four attempts, three of them because the test suite passes in an

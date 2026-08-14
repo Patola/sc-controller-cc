@@ -22,6 +22,57 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Version numbers follow the upstream release they diverged from, with a fourth
 component for this fork's own releases.
 
+## [0.6.0.10] - 2026-08-14
+
+A second audit pass from **Sergio Correia** (sergio@correia.cc), who found and
+fixed eight further defects; reviewed and regression-tested here. One of his
+patches was taken in part, noted in its commit message. Alongside those, a
+configuration-loss bug that had been quietly destroying settings.
+
+### Fixed
+
+- **An interrupted save no longer destroys every setting.** The configuration
+  was written in place, so anything killing the process mid-write left
+  truncated JSON — and the next start "recovered" from that by overwriting the
+  file with defaults, keeping no copy. Settings are now written atomically,
+  and a configuration that cannot be read is preserved as
+  `config.json.broken.N` instead of discarded.
+- **Unmapped buttons no longer press the right stick.** On a HID controller
+  configured by JSON, every input bit the configuration did not name was
+  mapped to bit 31 — which is a real button, `RSTICKPRESS`.
+- **The haptic Effect chooser stays available when no controller is
+  connected.** Opening a pad's configuration with the controller switched off
+  hid the whole Effect row, because "no controller attached" was treated as
+  "controller that cannot play effects".
+- **Actions replaced over the IPC socket work.** Every button press through a
+  replaced action raised TypeError, and a button held while the replacement
+  was installed could leave its key stuck down.
+- **A stalled controller no longer takes every other one down with it.** The
+  USB retry path queued a malformed entry, which crashed the mainloop that
+  serves all controllers.
+- **Stronger haptic clicks keep their effect.** Scaling a haptic up — the
+  firmer click at the edge of a pad — reset it to a plain click and multiplied
+  its frequency by a million, so tones and sweeps lost their character.
+- **Mode shifts triggered by a stick work.** Conditions on `STICK` read the
+  left *pad* instead, and conditions on `RSTICK` never matched anything.
+- **The RemotePad driver no longer runs analog handling for button events**, a
+  missing `break` between two switch cases.
+- Undefined behaviour in the HID decoder's button mapping, a crash in the
+  `Replace:`/`Lock:` error path, a race between the daemon's subprocess
+  supervisor and shutdown, and a CemuHook call passing one argument too many.
+- **A missing kernel header now says so.** Importing without kernel headers
+  and without the bundled copy failed with `FileNotFoundError` on a path
+  nobody had asked for; it now names what it looked for and how to fix it.
+- "Minimize to status icon instead closing" reads "instead of closing".
+
+### Packaging
+
+- `package.nix` builds again: its test gate failed in the Nix sandbox because
+  a test re-imported `scc` in a child interpreter that picked up the source
+  tree instead of the installed package. Fixed in the test.
+- `scripts/nar-hash.py` computes the `fetchFromGitHub` hash for `package.nix`
+  on machines without nix, self-testing against a hash nix itself produced.
+
 ## [0.6.0.9] - 2026-08-14
 
 ### Security
@@ -185,5 +236,6 @@ the DualShock 4 over Bluetooth becomes properly usable.
 - Verified on the Steam Controller 2 and the DualShock 4. The DualSense, Steam
   Controller v1 and Steam Deck have not been re-tested against this release.
 
+[0.6.0.10]: https://github.com/Patola/sc-controller-cc/releases/tag/v0.6.0.10
 [0.6.0.9]: https://github.com/Patola/sc-controller-cc/releases/tag/v0.6.0.9
 [0.6.0.8]: https://github.com/Patola/sc-controller-cc/releases/tag/v0.6.0.8

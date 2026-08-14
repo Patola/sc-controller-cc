@@ -189,17 +189,6 @@ python3.pkgs.buildPythonApplication rec {
     # tree: `python -P` drops the build cwd (which still holds ./scc) from
     # sys.path so `import scc` resolves via PYTHONPATH to $out. The X11/udev/
     # bluetooth libs scc dlopens at import must be reachable, hence LD_LIBRARY_PATH.
-    # REMOVE once `version` is past 0.6.0.9. In 0.6.0.9 and earlier,
-    # test_the_driver_imports_without_python_evdev spawns `python -c`, which
-    # prepends the build cwd ahead of PYTHONPATH -- so that child imports the
-    # SOURCE scc rather than the one from $out, and the source copy has no
-    # bundled input-event-codes.h. scc/uinput.py then falls through to
-    # /usr/include, which no sandbox has, and the gate fails on linux/input.h.
-    # Giving the source tree a copy too satisfies it. Fixed properly in the
-    # test as of 88da5205, so this stops being needed at the next release.
-    install -Dm644 ${linuxHeaders}/include/linux/input-event-codes.h \
-      scc/input-event-codes.h
-
     echo "Running post-install test suite..."
     PYTHONPATH="$out/${python3.sitePackages}''${PYTHONPATH:+:$PYTHONPATH}" \
     SCC_SHARED="$out/share/scc" \
