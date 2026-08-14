@@ -154,6 +154,7 @@ def test_the_driver_imports_without_python_evdev():
 	until a test imported it on a machine that had no python-evdev, which is
 	exactly what CI is.
 	"""
+	import os
 	import subprocess
 	import sys
 
@@ -170,5 +171,16 @@ def test_the_driver_imports_without_python_evdev():
 		"assert evdevdrv.grab_evdev_nodes('/dev/hidraw0') == []\n"
 		"print('ok')\n"
 	)
-	r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+	# Hand the child the parent's import path, and -P so it does not prepend the
+	# cwd. `python -c` otherwise puts the cwd first, ahead of any PYTHONPATH,
+	# which makes the child import a DIFFERENT scc than the one under test: in a
+	# packaged build (Nix, and any install-then-test flow) the parent imports the
+	# installed package while the child silently picked up the source tree beside
+	# it. That copy has no bundled input-event-codes.h, so scc.uinput fell through
+	# to /usr/include -- absent in a build sandbox -- and this test failed for a
+	# reason that had nothing to do with evdev.
+	env = dict(os.environ)
+	env["PYTHONPATH"] = os.pathsep.join(p for p in sys.path if p)
+	r = subprocess.run([sys.executable, "-P", "-c", code],
+		capture_output=True, text=True, env=env)
 	assert r.returncode == 0, r.stderr
