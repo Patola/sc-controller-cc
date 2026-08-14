@@ -83,7 +83,8 @@ void remotepad_input(RemotePad* pad, struct remote_joypad_message* msg) {
 				pad->input.buttons &= ~B_C;
 			}
 		}
-	
+		break;
+
 	case RETRO_DEVICE_ANALOG:
 		switch (msg->index) {
 		case RETRO_DEVICE_INDEX_ANALOG_LEFT:
