@@ -887,7 +887,7 @@ class SCCDaemon(Daemon):
 			with self.lock:
 				try:
 					if not self._can_lock_action(client.mapper, SCCDaemon.source_to_constant(l)):
-						client.wfile.write(b"Fail: Cannot lock " + l.encode("utf-8") + b"\n")
+						client.wfile.write(b"Fail: Cannot lock " + l + b"\n")
 						return
 				except ValueError:
 					tb = str(traceback.format_exc()).encode("utf-8").decode("unicode_escape").encode("latin1")
@@ -901,7 +901,7 @@ class SCCDaemon(Daemon):
 				try:
 					for l in to_lock:
 						if not self._can_lock_action(client.mapper, SCCDaemon.source_to_constant(l)):
-							client.wfile.write(b"Fail: Cannot lock " + l.encode("utf-8") + b"\n")
+							client.wfile.write(b"Fail: Cannot lock " + l + b"\n")
 							return
 				except ValueError:
 					tb = str(traceback.format_exc()).encode("utf-8").decode("unicode_escape").encode("latin1")
