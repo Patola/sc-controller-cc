@@ -22,6 +22,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Version numbers follow the upstream release they diverged from, with a fourth
 component for this fork's own releases.
 
+## [Unreleased]
+
+### Security
+
+A security audit and fix series contributed by **Sergio Correia**
+(sergio@correia.cc), who found and fixed all of the following. Reviewed and
+hardware-tested here; two patches were amended (noted in their commit messages),
+everything else landed as submitted.
+
+- **Heap overflow in the Steam Controller Bluetooth driver.** Long-packet
+  reassembly took a 4-bit packet number straight from the incoming report and
+  used it as a write offset into a 256-byte buffer. Packets numbered 14 and 15
+  wrote 16 and 34 bytes past the end of it, corrupting adjacent heap data, from
+  a value a paired device chooses.
+- **The IPC socket was world-accessible.** The daemon set `umask(0)` after
+  daemonizing, and applied `chmod 0600` to its control socket only *after* it
+  had started accepting connections. Any local user could connect during that
+  window -- and the socket accepts commands that run shell actions.
+- **Shell injection on daemon restart.** `os.system()` was called with an
+  unquoted `sys.argv[0]`.
+- **Arbitrary file loading over IPC.** The `Profile:` and `Selected:` commands
+  accepted any filesystem path, so a socket client could have an
+  attacker-controlled file loaded as a profile or menu -- and profiles may
+  contain `shell()` actions. Paths are now confined to the known profile and
+  menu directories, and `Replace:` no longer accepts `shell`, `profile`,
+  `restart`, `exit` or `turnoff`, including nested inside compound actions.
+  (This last filter is defence in depth rather than a boundary: `type()` and
+  `button()` must keep working for `Replace:` to have a purpose. The boundary
+  is the socket's permissions.)
+- **Out-of-bounds reads from malformed HID reports.** The `CLAMP` macro in the
+  HID decoder expanded to its own argument -- it never clamped anything -- and
+  axis values were read from a report without checking the offset against the
+  report's length. Both fixed; the DualShock 4 and DualSense axis parameters
+  were recalibrated to suit a `CLAMP` that now works, verified as producing
+  bit-identical output across the full input range.
+- **Scheduler task ordering.** `Task.__lt__` was missing its `return`, so it
+  always compared as false and the priority queue ordered tasks arbitrarily.
+
 ## [0.6.0.8] - 2026-08-11
 
 Two headline areas: the Steam Controller 2's haptics go from a single fixed
