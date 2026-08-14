@@ -115,6 +115,9 @@ class Controller:
 class HapticData:
 	"""Simple container to hold haptic feedback settings"""
 
+	_EFFECT_ATTRS = ("effect", "duration", "tone_frequency", "end_frequency",
+		"lfo_frequency", "lfo_depth", "script_id")
+
 	def __init__(self, position, amplitude=512, frequency=4, period=1024, count=1,
 			effect=HapticEffect.CLICK, duration=200, tone_frequency=160,
 			end_frequency=40, lfo_frequency=0, lfo_depth=0, script_id=0):
@@ -159,8 +162,7 @@ class HapticData:
 		# to the constructor -- doing so multiplied it again on every copy, and
 		# send_feedback() copies for every HapticPos.BOTH effect.
 		rv.frequency = self.frequency
-		for attr in ("effect", "duration", "tone_frequency", "end_frequency",
-				"lfo_frequency", "lfo_depth", "script_id"):
+		for attr in self._EFFECT_ATTRS:
 			setattr(rv, attr, getattr(self, attr))
 		return rv
 
@@ -183,4 +185,8 @@ class HapticData:
 		"""Allows multiplying HapticData by scalar to get same values with increased amplitude."""
 		position, amplitude, period, count = self.data
 		amplitude = min(amplitude * by, 0x8000)
-		return HapticData(position, amplitude, self.frequency, period, count)
+		rv = HapticData(position, amplitude, 1, period, count)
+		rv.frequency = self.frequency
+		for attr in self._EFFECT_ATTRS:
+			setattr(rv, attr, getattr(self, attr))
+		return rv
