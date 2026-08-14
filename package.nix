@@ -47,13 +47,11 @@
 #   With nix:     set `hash` to lib.fakeHash, run `home-manager switch`, and
 #                 paste the real value from the "got:" line of the mismatch.
 #
-#   Without nix:  scripts/nar-hash.py --self-test v0.6.0.9
+#   Without nix:  scripts/nar-hash.py --self-test v0.6.0.10
 #                 The self-test proves the script against a hash nix itself
 #                 produced before it prints a new one; do not skip it, since
 #                 a wrong serialization yields a plausible wrong hash that
-#                 only breaks for whoever builds next. That script landed
-#                 after the v0.6.0.9 tag, so it is not in that tag's tree:
-#                 https://github.com/Patola/sc-controller-cc/blob/main/scripts/nar-hash.py
+#                 only breaks for whoever builds next.
 #
 # Either way this can only happen AFTER the release is tagged -- the hash is
 # taken over the tag's own source tree -- so the bump always lands in a commit
@@ -87,14 +85,14 @@ let
 in
 python3.pkgs.buildPythonApplication rec {
   pname = "sc-controller-cc";
-  version = "0.6.0.9";
+  version = "0.6.0.10";
   pyproject = true;
 
   src = fetchFromGitHub {
     owner = "Patola";
     repo = "sc-controller-cc";
     rev = "v${version}";
-    hash = "sha256-5yGc/41AfokwV1N0RY5gzpGV6RZ+0fuTbK3CEDqPx7Y=";
+    hash = "sha256-OmNe0LtouliE4Mz509k+TfdcoId/NNIrwsw2HncGz1k=";
   };
 
   # The project's version is "dynamic" via setuptools_scm, which reads it from
