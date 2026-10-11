@@ -87,10 +87,19 @@ class Mapper:
 	def create_gamepad(self, enabled, poller):
 		"""Parses gamepad configuration and creates apropriate unput device"""
 		if not enabled or "SCC_NOGAMEPAD" in os.environ:
-			# Completly undocumented and for debuging purposes only.
-			# If set, no gamepad is emulated
-			self.gamepad = Dummy()
-			return None
+			# SCC_NOGAMEPAD emulates no gamepad at all -- keyboard and mouse
+			# only. Undocumented; see TODO.md, where this is the first tier of
+			# a selectable output device.
+			#
+			# Returns a Dummy, NOT None: the caller assigns whatever this
+			# returns to self.gamepad, so returning None left it as None and
+			# the assignment below was dead. The first thing to touch it then
+			# raised AttributeError -- fix_xinput, scheduled one second after
+			# startup, which the scheduler does not guard -- and that
+			# propagated out of the daemon's mainloop and killed it, a second
+			# after the controllers had been acquired. Setting the output
+			# device must not affect input handling.
+			return Dummy()
 		cfg = Config()
 		keys = ALL_BUTTONS[0 : cfg["output"]["buttons"]]
 		vendor = int(cfg["output"]["vendor"], 16)
