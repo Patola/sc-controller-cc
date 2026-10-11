@@ -47,7 +47,7 @@
 #   With nix:     set `hash` to lib.fakeHash, run `home-manager switch`, and
 #                 paste the real value from the "got:" line of the mismatch.
 #
-#   Without nix:  scripts/nar-hash.py --self-test v0.6.0.10
+#   Without nix:  scripts/nar-hash.py --self-test v0.6.0.11
 #                 The self-test proves the script against a hash nix itself
 #                 produced before it prints a new one; do not skip it, since
 #                 a wrong serialization yields a plausible wrong hash that
@@ -85,14 +85,14 @@ let
 in
 python3.pkgs.buildPythonApplication rec {
   pname = "sc-controller-cc";
-  version = "0.6.0.10";
+  version = "0.6.0.11";
   pyproject = true;
 
   src = fetchFromGitHub {
     owner = "Patola";
     repo = "sc-controller-cc";
     rev = "v${version}";
-    hash = "sha256-OmNe0LtouliE4Mz509k+TfdcoId/NNIrwsw2HncGz1k=";
+    hash = "sha256-4ttaCCF5WGFvRV8p8XjZ+7xVhmcf2AvLlMCXGzSObJU=";
   };
 
   # The project's version is "dynamic" via setuptools_scm, which reads it from
