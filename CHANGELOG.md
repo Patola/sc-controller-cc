@@ -22,6 +22,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Version numbers follow the upstream release they diverged from, with a fourth
 component for this fork's own releases.
 
+## [0.6.0.11] - 2026-10-11
+
+A single-bug release.
+
+### Fixed
+
+- **`SCC_NOGAMEPAD` no longer kills the daemon.** The undocumented variable
+  that runs without the emulated gamepad left the daemon with no gamepad
+  object at all rather than an inert one. Nothing noticed until a routine
+  housekeeping task touched it a second after startup; the resulting error
+  escaped the scheduler, which does not guard its callbacks, and took the
+  daemon down with it — just as controllers were being acquired. It presented
+  as "cannot acquire my Steam Controller", with nothing pointing at the output
+  device. Choosing the output device no longer affects input handling.
+
+### Documentation
+
+- **`SCC_NOGAMEPAD` is documented**, in a new *Environment variables* section
+  of the README, together with the `SCC_HAPTIC_DEBUG` and `SCC_GYRO_CALIB`
+  debugging variables. It notes that the variable is provisional: it is
+  intended to become a GUI setting, alongside a choice of which device to
+  emulate, and may be removed once that lands.
+
 ## [0.6.0.10] - 2026-08-14
 
 A second audit pass from **Sergio Correia** (sergio@correia.cc), who found and
@@ -236,6 +259,7 @@ the DualShock 4 over Bluetooth becomes properly usable.
 - Verified on the Steam Controller 2 and the DualShock 4. The DualSense, Steam
   Controller v1 and Steam Deck have not been re-tested against this release.
 
+[0.6.0.11]: https://github.com/Patola/sc-controller-cc/releases/tag/v0.6.0.11
 [0.6.0.10]: https://github.com/Patola/sc-controller-cc/releases/tag/v0.6.0.10
 [0.6.0.9]: https://github.com/Patola/sc-controller-cc/releases/tag/v0.6.0.9
 [0.6.0.8]: https://github.com/Patola/sc-controller-cc/releases/tag/v0.6.0.8

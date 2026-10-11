@@ -93,6 +93,44 @@ Fix it in **Steam → Settings → Controller** by turning off *PlayStation
 Controller Support*. Connecting the pad **by USB** also works, for a different
 reason: claiming the USB interface takes the device away from Steam too.
 
+## Environment variables
+
+### `SCC_NOGAMEPAD` — run without the emulated gamepad
+
+By default the daemon creates a virtual Xbox 360 pad, which is what games
+actually read. Set this variable and it creates none:
+
+```sh
+SCC_NOGAMEPAD=1 scc-daemon start
+```
+
+Keyboard and mouse emulation keep working, so keyboard/mouse bindings behave
+normally. Bindings that target gamepad buttons or axes go nowhere — they are
+silently discarded, not reported as errors. Input handling is untouched: your
+controllers are read exactly as before.
+
+Two things to know:
+
+- **The value is never read, only its presence.** `SCC_NOGAMEPAD=0` and
+  `SCC_NOGAMEPAD=` (empty) disable the gamepad just as `=1` does. To get the
+  gamepad back, *unset* the variable rather than setting it to `0`.
+- **This is provisional.** It is intended to become a proper setting in the
+  GUI, alongside a choice of which device to emulate — an Xbox 360 pad (the
+  current behaviour), a DualShock 4 or DualSense, or nothing at all. The
+  identity of the emulated pad is already pure configuration (`output` in
+  `~/.config/scc/config.json`), so the groundwork exists; see `TODO.md`. The
+  variable may be removed once the option lands.
+
+### Debugging variables
+
+Both only add logging; neither changes behaviour. Any non-empty value enables
+them, including `0`.
+
+- `SCC_HAPTIC_DEBUG` — logs every haptic report sent to a Steam Controller 2,
+  and the raw force-feedback effects arriving from games.
+- `SCC_GYRO_CALIB` — dumps raw gyroscope and accelerometer readings next to
+  the angles they integrate to, for calibrating a controller's IMU.
+
 ## Like what I'm doing?
 
 You can check out the ways to donate on [my website](https://rys.rs/donate), or just go straight to my [Ko-Fi](https://ko-fi.com/martinrys).
